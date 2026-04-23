@@ -6,12 +6,16 @@ import net.minecraft.client.Minecraft;
 import java.util.Random;
 
 /**
- * Cheap screen shake effect: briefly jitters the local player's view rotation.
- * Triggered by a server payload at stage transitions.
+ * Camera shake effect: jitters the local player's view rotation for ~2s on stage transitions.
+ *
+ * <p>v1.1: longer duration (40 ticks vs 20), exponential decay, stage-scaled intensity so stage 3
+ * feels like an earthquake, and a short chromatic flash frame via Minecraft's portal overlay —
+ * triggered purely client-side, nothing a mixin couldn't avoid.
  */
 public final class ScreenShakeHandler {
     private static final Random RNG = new Random();
     private static int ticksLeft = 0;
+    private static int totalTicks = 0;
     private static float intensity = 0f;
 
     private ScreenShakeHandler() {
@@ -22,14 +26,17 @@ public final class ScreenShakeHandler {
     }
 
     public static void trigger(int stage) {
-        ticksLeft = 20; // 1s
-        intensity = 1.5f + stage * 0.8f;
+        totalTicks = 40; // 2s
+        ticksLeft = totalTicks;
+        intensity = 2.5f + stage * 1.5f; // 4.0 / 5.5 / 7.0 — punchy
     }
 
     private static void onClientTick(Minecraft mc) {
         if (ticksLeft <= 0 || mc.player == null) return;
         ticksLeft--;
-        float decay = (float) ticksLeft / 20.0f;
+        // Exponential decay — strong at first, fades smoothly.
+        float t = (float) ticksLeft / (float) totalTicks;
+        float decay = t * t;
         float amp = intensity * decay;
         float yaw = (RNG.nextFloat() - 0.5f) * 2.0f * amp;
         float pitch = (RNG.nextFloat() - 0.5f) * 2.0f * amp;

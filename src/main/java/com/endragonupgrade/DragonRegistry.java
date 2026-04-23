@@ -1,7 +1,7 @@
 package com.endragonupgrade;
 
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.server.MinecraftServer;
 
 import java.util.HashMap;
 import java.util.Map;

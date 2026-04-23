@@ -8,6 +8,13 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 
+/**
+ * Receives all clientbound payloads from {@link com.endragonupgrade.NetworkPayloads}.
+ *
+ * <p>v1.1 boosts the local empowerment spectacle: a dense multi-layer particle vortex
+ * (portal + reverse_portal + end_rod + soul_fire_flame + enchant), an expanding impact ring
+ * and a two-sound layered thunder stinger.
+ */
 public final class ClientNetworkHandler {
     private ClientNetworkHandler() {
     }
@@ -28,18 +35,55 @@ public final class ClientNetworkHandler {
         if (mc.level == null) return;
         Entity dragon = mc.level.getEntity(payload.dragonEntityId());
         if (dragon == null) return;
-        // Local cosmetic: a ring of portal particles around the dragon client-side.
-        for (int i = 0; i < 120; i++) {
+
+        double dx = dragon.getX(), dy = dragon.getY(), dz = dragon.getZ();
+
+        // Dense portal vortex (400 particles) swirling toward the dragon.
+        for (int i = 0; i < 400; i++) {
             double angle = Math.random() * Math.PI * 2;
-            double r = 4 + Math.random() * 3;
-            double dx = Math.cos(angle) * r;
-            double dz = Math.sin(angle) * r;
-            double dy = (Math.random() - 0.5) * 6;
+            double r = 4 + Math.random() * 6;
+            double px = Math.cos(angle) * r;
+            double pz = Math.sin(angle) * r;
+            double py = (Math.random() - 0.5) * 10;
             mc.level.addParticle(ParticleTypes.PORTAL,
-                    dragon.getX() + dx, dragon.getY() + dy + 2, dragon.getZ() + dz,
-                    -dx * 0.1, -dy * 0.05, -dz * 0.1);
+                    dx + px, dy + py + 2, dz + pz,
+                    -px * 0.15, -py * 0.08, -pz * 0.15);
         }
-        mc.level.playLocalSound(dragon.getX(), dragon.getY(), dragon.getZ(),
-                SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.HOSTILE, 6.0f, 0.8f, false);
+        // End-rod sparkles for star-like glints.
+        for (int i = 0; i < 80; i++) {
+            double angle = Math.random() * Math.PI * 2;
+            double r = 5 + Math.random() * 4;
+            mc.level.addParticle(ParticleTypes.END_ROD,
+                    dx + Math.cos(angle) * r, dy + Math.random() * 6 - 1, dz + Math.sin(angle) * r,
+                    0, 0.04, 0);
+        }
+        // Soul fire — eerie mood.
+        for (int i = 0; i < 60; i++) {
+            double angle = Math.random() * Math.PI * 2;
+            double r = 2 + Math.random() * 4;
+            mc.level.addParticle(ParticleTypes.SOUL_FIRE_FLAME,
+                    dx + Math.cos(angle) * r, dy + Math.random() * 4, dz + Math.sin(angle) * r,
+                    0, 0.02, 0);
+        }
+        // Enchant glyphs streaming upward.
+        for (int i = 0; i < 60; i++) {
+            mc.level.addParticle(ParticleTypes.ENCHANT,
+                    dx + (Math.random() - 0.5) * 8, dy + 8 + Math.random() * 6, dz + (Math.random() - 0.5) * 8,
+                    0, -0.2, 0);
+        }
+        // Reverse portal ring at ground level.
+        for (int i = 0; i < 64; i++) {
+            double a = (2 * Math.PI * i) / 64.0;
+            mc.level.addParticle(ParticleTypes.REVERSE_PORTAL,
+                    dx + Math.cos(a) * 10, dy - 1, dz + Math.sin(a) * 10,
+                    -Math.cos(a) * 0.2, 0.1, -Math.sin(a) * 0.2);
+        }
+
+        mc.level.playLocalSound(dx, dy, dz, SoundEvents.LIGHTNING_BOLT_THUNDER,
+                SoundSource.HOSTILE, 10.0f, 0.6f, false);
+        mc.level.playLocalSound(dx, dy, dz, SoundEvents.LIGHTNING_BOLT_IMPACT,
+                SoundSource.HOSTILE, 6.0f, 0.9f, false);
+        mc.level.playLocalSound(dx, dy, dz, SoundEvents.ENDER_DRAGON_GROWL,
+                SoundSource.HOSTILE, 8.0f, 0.6f, false);
     }
 }

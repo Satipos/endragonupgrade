@@ -1,5 +1,6 @@
 package com.endragonupgrade.attack;
 
+import net.minecraft.core.particles.ColorParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.particles.PowerParticleOption;
 import net.minecraft.server.level.ServerLevel;
@@ -14,11 +15,11 @@ import net.minecraft.world.entity.projectile.hurtingprojectile.DragonFireball;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Stage 2 attack — spits a DragonFireball (vanilla "purple fireball") that, when it lands,
- * leaves a lingering dragon-breath cloud (vanilla behaviour of DragonFireball is already to do this).
+ * Stage 2+ ranged attack — spits a DragonFireball (vanilla "purple fireball") that, on impact,
+ * leaves a lingering dragon-breath cloud.
  *
- * <p>Also exposes a helper that drops a short, low-duration breath cloud directly behind the dragon
- * during the faster stage-1 charge, producing the "breath trail" described in the spec.
+ * <p>Also exposes a helper that drops a short breath trail cloud behind the dragon during charges
+ * (stage-1 behaviour), and a particle muzzle-flash effect when firing to beef up visuals.
  */
 public final class PurpleFireballAttack {
     private PurpleFireballAttack() {
@@ -33,8 +34,19 @@ public final class PurpleFireballAttack {
         fireball.setPos(origin.x, origin.y, origin.z);
         level.addFreshEntity(fireball);
 
+        // Muzzle flash
+        level.sendParticles(ColorParticleOption.create(ParticleTypes.FLASH, 1.0f, 0.3f, 1.0f),
+                origin.x, origin.y, origin.z, 1, 0, 0, 0, 0);
+        level.sendParticles(PowerParticleOption.create(ParticleTypes.DRAGON_BREATH, 1.0f),
+                origin.x, origin.y, origin.z,
+                30, 0.4, 0.4, 0.4, 0.15);
+        level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, origin.x, origin.y, origin.z,
+                12, 0.3, 0.3, 0.3, 0.05);
+
         level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
-                SoundEvents.DRAGON_FIREBALL_EXPLODE, SoundSource.HOSTILE, 2.0f, 1.1f);
+                SoundEvents.DRAGON_FIREBALL_EXPLODE, SoundSource.HOSTILE, 3.0f, 1.0f);
+        level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                SoundEvents.BLAZE_SHOOT, SoundSource.HOSTILE, 2.0f, 0.6f);
     }
 
     public static void spawnBreathCloud(ServerLevel level, EnderDragon dragon) {
@@ -45,14 +57,15 @@ public final class PurpleFireballAttack {
 
         AreaEffectCloud cloud = new AreaEffectCloud(level, x, y, z);
         cloud.setOwner(dragon);
-        cloud.setRadius(2.5f);
-        cloud.setDuration(80);
+        cloud.setRadius(3.5f);
+        cloud.setDuration(100);
         cloud.setRadiusPerTick(-0.01f);
         cloud.setCustomParticle(PowerParticleOption.create(ParticleTypes.DRAGON_BREATH, 1.0f));
-        cloud.setPotionDurationScale(0.15f);
-        cloud.addEffect(new MobEffectInstance(MobEffects.INSTANT_DAMAGE, 1, 0));
+        cloud.setPotionDurationScale(0.20f);
+        cloud.addEffect(new MobEffectInstance(MobEffects.INSTANT_DAMAGE, 1, 1));
         level.addFreshEntity(cloud);
 
-        level.sendParticles(ParticleTypes.PORTAL, x, y + 1, z, 15, 1.0, 0.6, 1.0, 0.05);
+        level.sendParticles(ParticleTypes.PORTAL, x, y + 1, z, 25, 1.2, 0.8, 1.2, 0.1);
+        level.sendParticles(ParticleTypes.END_ROD, x, y + 0.5, z, 6, 1.0, 0.5, 1.0, 0.02);
     }
 }

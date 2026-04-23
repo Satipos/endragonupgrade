@@ -5,24 +5,33 @@ import java.util.UUID;
 /**
  * Per-dragon runtime state for an empowered Ender Dragon.
  * All timers are measured in server ticks (20 tps).
+ *
+ * <p>Tuned for "3× harder" compared to v1.0.0:
+ *  - triple max HP,
+ *  - ~3× faster attack cadence,
+ *  - larger/stronger shockwave,
+ *  - constant passive damage + slowness aura while near the dragon (stage 2+).
  */
 public final class EmpoweredDragonState {
-    public static final int FREEZE_TICKS = 60; // 3 seconds at 20tps
+    public static final int FREEZE_TICKS = 100; // 5 seconds at 20tps
+    public static final float EMPOWERED_MAX_HEALTH = 600.0f; // 3× vanilla 200
 
     public final UUID dragonId;
-    public final float maxHealth;
+    public final float originalMaxHealth;
 
-    public int stage = 0;            // 0 = frozen/animating, 1 / 2 / 3 after freeze
+    public int stage = 0;               // 0 = freezing, 1 / 2 / 3 after freeze finishes
     public int freezeTicksLeft;
-    public int chargeCooldown = 0;   // remaining ticks before next strafe/charge bias
-    public int endermiteCooldown = 8 * 20;    // stage 2: summon endermites every 8s
-    public int fireballCooldown = 3 * 20;     // stage 2: purple fireball every ~3s
-    public int shockwaveCooldown = 12 * 20;   // stage 3: shockwave every 12s
+    public int chargeCooldown = 0;      // faster charges (every ~4s vs vanilla ~15s)
+    public int endermiteCooldown = 60;  // stage 2 (3s)
+    public int fireballCooldown = 40;   // stage 2 (2s)
+    public int shockwaveCooldown = 80;  // stage 3 (4s)
+    public int auraCooldown = 40;       // passive aura every 2s (stage 2+)
     public int tickCounter = 0;
+    public boolean shockwaveTell = false; // windup signalling shockwave in 1s
 
-    public EmpoweredDragonState(UUID dragonId, float maxHealth) {
+    public EmpoweredDragonState(UUID dragonId, float originalMaxHealth) {
         this.dragonId = dragonId;
-        this.maxHealth = maxHealth;
+        this.originalMaxHealth = originalMaxHealth;
         this.freezeTicksLeft = FREEZE_TICKS;
     }
 
