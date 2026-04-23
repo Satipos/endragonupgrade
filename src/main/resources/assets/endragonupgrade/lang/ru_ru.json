@@ -1,6 +1,8 @@
 {
   "item.endragonupgrade.dragon_shot": "Драконий Снаряд",
-  "item.endragonupgrade.dragon_shot.desc": "Стрела с мощным уроном. При промахе оставляет облако драконьего дыхания.",
+  "item.endragonupgrade.dragon_shot.desc": "Сильная стрела. При промахе оставляет облако драконьего дыхания.",
+  "item.endragonupgrade.chain_of_god": "Chain of God",
+  "item.endragonupgrade.chain_of_god.desc": "Правый клик по усиленному Эндер Дракону — замораживает его на 10 секунд.",
   "advancement.endragonupgrade.invincible.title": "Неуязвимый",
   "advancement.endragonupgrade.invincible.description": "Ты победил самое сложное, самое опасное существо майнкрафта, так держать!",
   "endragonupgrade.menu.title": "Призыв усиленного дракона",
@@ -9,5 +11,7 @@
   "endragonupgrade.menu.hard.desc": "3 стадии, 600 HP, агрессивные атаки.",
   "endragonupgrade.menu.very_hard": "ОЧЕНЬ СЛОЖНАЯ",
   "endragonupgrade.menu.very_hard.desc": "4 стадии, 1200 HP. Вдвое быстрее, с радиальной драконьей новой и огненными колоннами. Только для сильнейших.",
+  "endragonupgrade.menu.extreme": "ЭКСТРИМ",
+  "endragonupgrade.menu.extreme.desc": "6 стадий, 2000 HP. В три раза сложнее ОЧЕНЬ СЛОЖНОЙ. Огненный дождь, теневые клоны, безжалостная аура.",
   "endragonupgrade.menu.cancel": "Отмена"
 }

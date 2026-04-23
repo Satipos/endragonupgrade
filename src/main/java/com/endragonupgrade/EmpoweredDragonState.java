@@ -40,6 +40,14 @@ public final class EmpoweredDragonState {
     public int nova4Cooldown = 100;
     public int pillar4Cooldown = 140;
 
+    // Stage 5/6 (EXTREME only) tickers
+    public int rainCooldown = 60;
+    public int cloneCooldown = 160;
+
+    // Chain-of-God freeze: while > 0 the dragon is held still (no attacks, no movement, no knockback).
+    public int chainFreezeTicksLeft = 0;
+    public static final int CHAIN_FREEZE_TICKS = 200; // 10 s at 20tps
+
     public EmpoweredDragonState(UUID dragonId, float originalMaxHealth, Difficulty difficulty) {
         this.dragonId = dragonId;
         this.originalMaxHealth = originalMaxHealth;

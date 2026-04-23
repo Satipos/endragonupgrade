@@ -48,6 +48,17 @@ public final class EmpoweredHealthBar {
             { 0xFF000000, 0xFF220022, 0xFFFF0040, 0xFFFF20FF }  // stage 4 — black-magenta void
     };
 
+    // EXTREME palette — 6 stages, gold+crimson on a black canvas.
+    private static final int[][] EX_STAGE_COLORS = {
+            { 0xFF1A0D00, 0xFFFFB020, 0xFFFFE080, 0xFFFFF2B0 }, // pre/stage 1 — gold
+            { 0xFF1A0D00, 0xFFFFB020, 0xFFFFE080, 0xFFFFF2B0 }, // stage 1 — gold
+            { 0xFF2A1500, 0xFFFF8000, 0xFFFFC060, 0xFFFFE0A0 }, // stage 2 — amber
+            { 0xFF3A0000, 0xFFFF5010, 0xFFFFA040, 0xFFFFD090 }, // stage 3 — burnt orange
+            { 0xFF2A0000, 0xFFFF1020, 0xFFFF6060, 0xFFFFB0B0 }, // stage 4 — crimson
+            { 0xFF1A0020, 0xFFFF00FF, 0xFFFFA0FF, 0xFFFFE0FF }, // stage 5 — shock pink
+            { 0xFF000000, 0xFF400040, 0xFFFFD040, 0xFFFFFF80 }  // stage 6 — black void with gold
+    };
+
     private static float health = 0f;
     private static float maxHealth = 0f;
     private static float displayedFraction = 0f;
@@ -72,8 +83,8 @@ public final class EmpoweredHealthBar {
             float blend = Math.min(1f, 0.18f * delta);
             displayedFraction += (target - displayedFraction) * blend;
 
-            int[][] table = difficultyId == 1 ? VH_STAGE_COLORS : STAGE_COLORS;
-            int[] palette = table[Math.max(0, Math.min(4, stage))];
+            int[][] table = difficultyId == 2 ? EX_STAGE_COLORS : difficultyId == 1 ? VH_STAGE_COLORS : STAGE_COLORS;
+            int[] palette = table[Math.max(0, Math.min(table.length - 1, stage))];
             int fillDeep = palette[0];
             int fillMid = palette[1];
             int highlight = palette[2];
@@ -90,8 +101,11 @@ public final class EmpoweredHealthBar {
             drawFill(graphics, x, y, fillMid, highlight, glow);
             drawPips(graphics, x, y, highlight);
             drawSideOrnaments(graphics, x, y, highlight, glow);
-            if (difficultyId == 1) {
+            if (difficultyId >= 1) {
                 drawVeryHardOrnaments(graphics, x, y, highlight, glow);
+            }
+            if (difficultyId == 2) {
+                drawExtremeOrnaments(graphics, x, y, highlight, glow);
             }
             drawCriticalFlash(graphics, x, y);
             drawHpText(graphics, cx, y);
@@ -99,13 +113,18 @@ public final class EmpoweredHealthBar {
     }
 
     private static void drawTitle(GuiGraphicsExtractor g, int cx, int y) {
-        if (difficultyId == 1) {
-            // VERY_HARD — skull-flanked menacing red title with shimmering flicker.
+        if (difficultyId == 2) {
+            // EXTREME — gold crown + crimson title with pulsing "⚔" swords.
             long now = System.currentTimeMillis();
-            boolean flicker = (now / 120) % 13 == 0;
-            String label = flicker
-                    ? "§4§l☠ §c§lE N D E R   D R A G O N §4§l☠"
-                    : "§4§l☠ §c§lE N D E R   D R A G O N §4§l☠";
+            boolean strobe = (now / 200) % 2 == 0;
+            String label = strobe
+                    ? "§6§l⚔ §c§lE N D E R   D R A G O N §6§l⚔"
+                    : "§e§l⚔ §4§lE N D E R   D R A G O N §e§l⚔";
+            g.centeredText(Minecraft.getInstance().font, label, cx, y - 32, 0xFFFFFFFF);
+            String sub = "§6§l§n⚠ Э К С Т Р И М ⚠§r  §8• §c" + (int) health + " §8/ §c" + (int) maxHealth;
+            g.centeredText(Minecraft.getInstance().font, sub, cx, y - 20, 0xFFFFD080);
+        } else if (difficultyId == 1) {
+            String label = "§4§l☠ §c§lE N D E R   D R A G O N §4§l☠";
             g.centeredText(Minecraft.getInstance().font, label, cx, y - 32, 0xFFFFFFFF);
             String sub = "§4§lО Ч Е Н Ь   С Л О Ж Н А Я   §8• §c" + (int) health + " §8/ §c" + (int) maxHealth;
             g.centeredText(Minecraft.getInstance().font, sub, cx, y - 20, 0xFFFFB0B0);
@@ -118,9 +137,11 @@ public final class EmpoweredHealthBar {
     }
 
     private static void drawStageChips(GuiGraphicsExtractor g, int cx, int y, int[] palette) {
-        int stageCount = difficultyId == 1 ? 4 : 3;
-        String[] allLabels = { "I", "II", "III", "IV" };
-        int chipW = 30, chipH = 14, gap = 8;
+        int stageCount = difficultyId == 2 ? 6 : difficultyId == 1 ? 4 : 3;
+        String[] allLabels = { "I", "II", "III", "IV", "V", "VI" };
+        int chipW = difficultyId == 2 ? 22 : 30;
+        int chipH = 14;
+        int gap = difficultyId == 2 ? 6 : 8;
         int total = stageCount * chipW + (stageCount - 1) * gap;
         int cxStart = cx - total / 2;
         int chipY = y - 48;
@@ -168,6 +189,42 @@ public final class EmpoweredHealthBar {
             if (ax < x + 2 || ax >= x + BAR_WIDTH - 2) continue;
             int ay = y + 3 + ((int) (now / 20 + i * 3) % (BAR_HEIGHT - 6));
             g.fill(ax, ay, ax + 1, ay + 1, glow);
+        }
+    }
+
+    /**
+     * EXTREME on top of the VH ornament: crown-like gold spikes above the bar,
+     * blood drip-lines below, embers floating around.
+     */
+    private static void drawExtremeOrnaments(GuiGraphicsExtractor g, int x, int y, int highlight, int glow) {
+        long now = System.currentTimeMillis();
+        // Crown of gold spikes (5 big, 4 small) above centred on top edge.
+        int cx = x + BAR_WIDTH / 2;
+        int[] spikeH = {4, 6, 8, 10, 12, 10, 8, 6, 4};
+        for (int i = 0; i < spikeH.length; i++) {
+            int sx = cx - (spikeH.length * 6) / 2 + i * 6;
+            int h = spikeH[i] + (int) ((now / 80 + i * 17) % 3);
+            // drop shadow
+            g.fill(sx, y - 6 - h - 1, sx + 4, y - 6, 0xB0000000);
+            // gold filling
+            g.fill(sx, y - 6 - h, sx + 4, y - 6, 0xFFFFC040);
+            g.fill(sx + 1, y - 6 - h + 1, sx + 3, y - 7, 0xFFFFF080);
+        }
+        // Blood drip lines below bar
+        for (int i = 0; i < 12; i++) {
+            int dripX = x + 20 + i * 26;
+            int dripLen = 3 + (int) ((now / 100 + i * 47) % 4);
+            g.fill(dripX, y + BAR_HEIGHT + 6, dripX + 1, y + BAR_HEIGHT + 6 + dripLen, 0xC0B00010);
+            g.fill(dripX, y + BAR_HEIGHT + 6 + dripLen, dripX + 1, y + BAR_HEIGHT + 7 + dripLen, 0xFFFF4040);
+        }
+        // Floating embers (random points above bar)
+        for (int i = 0; i < 10; i++) {
+            double t = (now / 40.0 + i * 37) % 100;
+            int ex = x + (int) ((i * 33 + t * 3) % BAR_WIDTH);
+            int ey = y - 12 - (int) ((t / 100) * 18);
+            int alpha = 0x80 + (int) (Math.sin(t * 0.5) * 0x40);
+            int col = (Math.max(0, Math.min(0xFF, alpha)) << 24) | 0xFFD050;
+            g.fill(ex, ey, ex + 1, ey + 1, col);
         }
     }
 

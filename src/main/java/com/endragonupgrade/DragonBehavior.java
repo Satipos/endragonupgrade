@@ -25,6 +25,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.projectile.hurtingprojectile.DragonFireball;
 import net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhase;
 import net.minecraft.world.entity.monster.Endermite;
 import net.minecraft.world.entity.player.Player;
@@ -84,7 +85,7 @@ public final class DragonBehavior {
             registry.remove(stale.get(i));
             EmpoweredDragonState state = deceased.get(i);
             broadcastClear(server);
-            if (state != null && state.difficulty == Difficulty.VERY_HARD && state.stage >= 1) {
+            if (state != null && state.difficulty != Difficulty.HARD && state.stage >= 1) {
                 Advancements.grantInvincibleNearEnd(server, state);
             }
         }
@@ -119,11 +120,57 @@ public final class DragonBehavior {
             onStageTransition(level, dragon, state);
         }
 
-        maintainSittingSchedule(level, dragon, state);
-        runStageAttacks(level, dragon, state);
+        if (state.chainFreezeTicksLeft > 0) {
+            tickChainFreeze(level, dragon, state);
+        } else {
+            maintainSittingSchedule(level, dragon, state);
+            runStageAttacks(level, dragon, state);
+        }
 
         if (state.tickCounter % 4 == 0) {
             broadcastHealth(server, dragon, state);
+        }
+    }
+
+    /**
+     * Chain-of-God freeze tick — keeps the dragon in HOVER phase, zeros its velocity, suppresses
+     * attacks/knockback. Adds a golden chain vortex around the dragon for the duration.
+     */
+    private static final net.minecraft.core.particles.DustParticleOptions GOLD_DUST =
+            new net.minecraft.core.particles.DustParticleOptions(0xFFD54A, 1.2f);
+
+    private static void tickChainFreeze(ServerLevel level, EnderDragon dragon, EmpoweredDragonState state) {
+        state.chainFreezeTicksLeft--;
+        try {
+            dragon.getPhaseManager().setPhase(EnderDragonPhase.HOVERING);
+        } catch (Throwable ignored) {
+            // Some internal states may refuse the phase transition — ignore, we still zero velocity.
+        }
+        dragon.setDeltaMovement(0, 0, 0);
+
+        double dx = dragon.getX(), dy = dragon.getY(), dz = dragon.getZ();
+        // Golden chain corona — a helix of gold dust + end-rod sparkles.
+        if (state.chainFreezeTicksLeft % 2 == 0) {
+            double phase = (state.tickCounter % 40) / 40.0 * Math.PI * 2;
+            for (int i = 0; i < 6; i++) {
+                double layer = i / 6.0;
+                double a = phase + layer * Math.PI * 2;
+                double r = 4.0 + Math.sin(state.tickCounter * 0.1 + i) * 1.0;
+                double px = dx + Math.cos(a) * r;
+                double pz = dz + Math.sin(a) * r;
+                double py = dy - 1 + layer * 10;
+                level.sendParticles(GOLD_DUST, px, py, pz, 2, 0.1, 0.1, 0.1, 0.0);
+                level.sendParticles(ParticleTypes.END_ROD, px, py, pz, 1, 0.02, 0.05, 0.02, 0.0);
+            }
+        }
+        // On the last tick release with a bright flash.
+        if (state.chainFreezeTicksLeft == 0) {
+            level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                            ParticleTypes.FLASH, 1.0f, 0.9f, 0.3f),
+                    dx, dy + 2, dz, 4, 0.5, 0.5, 0.5, 0.0);
+            level.sendParticles(ParticleTypes.END_ROD, dx, dy + 2, dz, 80, 3.0, 3.0, 3.0, 0.4);
+            level.playSound(null, dx, dy, dz, SoundEvents.HEAVY_CORE_BREAK,
+                    SoundSource.HOSTILE, 4.0f, 1.4f);
         }
     }
 
@@ -183,6 +230,15 @@ public final class DragonBehavior {
 
     private static int computeStage(EnderDragon dragon, EmpoweredDragonState state) {
         float pct = dragon.getHealth() / dragon.getMaxHealth();
+        if (state.difficulty == Difficulty.EXTREME) {
+            // 6 stages at 5%, 15%, 30%, 50%, 70%, >70%.
+            if (pct <= 0.05f) return 6;
+            if (pct <= 0.15f) return 5;
+            if (pct <= 0.30f) return 4;
+            if (pct <= 0.50f) return 3;
+            if (pct <= 0.70f) return 2;
+            return 1;
+        }
         if (state.difficulty == Difficulty.VERY_HARD) {
             if (pct <= 0.10f) return 4;
             if (pct <= 0.25f) return 3;
@@ -314,12 +370,13 @@ public final class DragonBehavior {
     // -------------------- Stage combat --------------------
 
     private static void runStageAttacks(ServerLevel level, EnderDragon dragon, EmpoweredDragonState state) {
-        // On VERY_HARD every attack fires approximately twice as often.
+        // Attack cadence by difficulty.
         boolean vh = state.difficulty == Difficulty.VERY_HARD;
-        int charge = vh ? 40 : 80;
-        int endermite = vh ? 30 : 60;
-        int fireball = vh ? 10 : 20;
-        int shockwave = vh ? 40 : 80;
+        boolean ex = state.difficulty == Difficulty.EXTREME;
+        int charge = ex ? 25 : vh ? 40 : 80;
+        int endermite = ex ? 20 : vh ? 30 : 60;
+        int fireball = ex ? 6 : vh ? 10 : 20;
+        int shockwave = ex ? 30 : vh ? 40 : 80;
 
         // Faster charges (every ~4s) across all stages.
         if (state.chargeCooldown > 0) state.chargeCooldown--;
@@ -342,7 +399,7 @@ public final class DragonBehavior {
         if (state.stage >= 2) {
             if (state.endermiteCooldown > 0) state.endermiteCooldown--;
             if (state.endermiteCooldown == 0) {
-                summonEndermites(level, dragon, vh ? 5 : 3);
+                summonEndermites(level, dragon, ex ? 7 : vh ? 5 : 3);
                 state.endermiteCooldown = endermite;
             }
             if (state.fireballCooldown > 0) state.fireballCooldown--;
@@ -376,17 +433,89 @@ public final class DragonBehavior {
             }
         }
 
-        // Stage 4 (VERY_HARD only) — radial nova + pillar columns.
+        // Stage 4 (VERY_HARD and EXTREME) — radial nova + pillar columns.
         if (state.stage >= 4) {
             if (state.nova4Cooldown > 0) state.nova4Cooldown--;
             if (state.nova4Cooldown == 0) {
                 radialNova(level, dragon);
-                state.nova4Cooldown = 60;
+                state.nova4Cooldown = ex ? 40 : 60;
             }
             if (state.pillar4Cooldown > 0) state.pillar4Cooldown--;
             if (state.pillar4Cooldown == 0) {
                 firePillars(level, dragon);
-                state.pillar4Cooldown = 100;
+                state.pillar4Cooldown = ex ? 70 : 100;
+            }
+        }
+
+        // Stage 5 (EXTREME only) — continuous fireball rain around every player.
+        if (state.stage >= 5 && ex) {
+            if (state.rainCooldown > 0) state.rainCooldown--;
+            if (state.rainCooldown == 0) {
+                fireRain(level, dragon);
+                state.rainCooldown = 40;
+            }
+        }
+
+        // Stage 6 (EXTREME only) — call shadow clones that burst breath around players.
+        if (state.stage >= 6 && ex) {
+            if (state.cloneCooldown > 0) state.cloneCooldown--;
+            if (state.cloneCooldown == 0) {
+                shadowBurst(level, dragon);
+                state.cloneCooldown = 80;
+            }
+        }
+    }
+
+    /**
+     * Stage V attack — purple meteors rain from above every nearby player.
+     */
+    private static void fireRain(ServerLevel level, EnderDragon dragon) {
+        for (Player p : level.players()) {
+            if (p.isCreative() || p.isSpectator()) continue;
+            if (p.distanceToSqr(dragon) > 80 * 80) continue;
+            // 3 meteors per player.
+            for (int i = 0; i < 3; i++) {
+                double ox = (RNG.nextDouble() - 0.5) * 10;
+                double oz = (RNG.nextDouble() - 0.5) * 10;
+                double px = p.getX() + ox;
+                double py = p.getY() + 22;
+                double pz = p.getZ() + oz;
+                DragonFireball meteor = new DragonFireball(level, dragon, new Vec3(0, -1, 0).normalize());
+                meteor.setPos(px, py, pz);
+                level.addFreshEntity(meteor);
+            }
+        }
+        level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.HOSTILE, 3.0f, 0.5f);
+    }
+
+    /**
+     * Stage VI attack — each player gets a "shadow dragon burst": 60 particles + AoE damage
+     * around them to simulate ghost clones swooping in.
+     */
+    private static void shadowBurst(ServerLevel level, EnderDragon dragon) {
+        for (Player p : level.players()) {
+            if (p.isCreative() || p.isSpectator()) continue;
+            if (p.distanceToSqr(dragon) > 96 * 96) continue;
+            Vec3 pos = p.position();
+            level.sendParticles(net.minecraft.core.particles.PowerParticleOption.create(
+                            ParticleTypes.DRAGON_BREATH, 1.0f),
+                    pos.x, pos.y + 1, pos.z, 120, 2.5, 1.0, 2.5, 0.3);
+            level.sendParticles(ParticleTypes.PORTAL,
+                    pos.x, pos.y + 1, pos.z, 60, 2.0, 2.0, 2.0, 0.6);
+            level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+                    pos.x, pos.y + 1, pos.z, 40, 1.5, 1.0, 1.5, 0.1);
+            level.playSound(null, pos.x, pos.y, pos.z, SoundEvents.ENDER_DRAGON_GROWL,
+                    SoundSource.HOSTILE, 3.0f, 0.3f);
+            // AoE damage
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    pos.x - 3, pos.y - 1, pos.z - 3, pos.x + 3, pos.y + 3, pos.z + 3);
+            DamageSource src = dragon.damageSources().mobAttack(dragon);
+            for (Player q : level.getEntitiesOfClass(Player.class, box,
+                    pp -> pp.isAlive() && !pp.isCreative() && !pp.isSpectator())) {
+                q.hurtServer(level, src, 10.0f);
+                q.addEffect(new MobEffectInstance(MobEffects.WITHER, 100, 1));
+                q.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 40, 0));
             }
         }
     }
@@ -440,8 +569,8 @@ public final class DragonBehavior {
     }
 
     private static void applyAuraDamage(ServerLevel level, EnderDragon dragon, EmpoweredDragonState state) {
-        double radius = state.stage >= 4 ? 12.0 : 8.0;
-        float damage = state.stage >= 4 ? 4.0f : 2.0f;
+        double radius = state.stage >= 6 ? 18.0 : state.stage >= 5 ? 15.0 : state.stage >= 4 ? 12.0 : 8.0;
+        float damage = state.stage >= 6 ? 8.0f : state.stage >= 5 ? 6.0f : state.stage >= 4 ? 4.0f : 2.0f;
         Vec3 c = dragon.position();
         AABB box = new AABB(c.x - radius, c.y - radius, c.z - radius,
                 c.x + radius, c.y + radius, c.z + radius);
@@ -494,12 +623,16 @@ public final class DragonBehavior {
             case 2 -> ChatFormatting.GOLD;
             case 3 -> ChatFormatting.RED;
             case 4 -> ChatFormatting.DARK_RED;
+            case 5 -> ChatFormatting.GOLD;
+            case 6 -> ChatFormatting.DARK_PURPLE;
             default -> ChatFormatting.LIGHT_PURPLE;
         };
         String roman = switch (state.stage) {
             case 2 -> "II";
             case 3 -> "III";
             case 4 -> "IV";
+            case 5 -> "V";
+            case 6 -> "VI";
             default -> "I";
         };
         Component title = Component.literal("⚡ Ярость " + roman + " ⚡")
@@ -509,6 +642,8 @@ public final class DragonBehavior {
             case 2 -> "Эндер Дракон освобождает тьму";
             case 3 -> "Последний рубеж — он не будет щадить";
             case 4 -> "КАТАКЛИЗМ — он стал неуязвим ко всему";
+            case 5 -> "ОГНЕННЫЙ ДОЖДЬ — небо пылает";
+            case 6 -> "ТЕНЕВЫЕ КЛОНЫ — финальный экзамен смерти";
             default -> "";
         }).withStyle(colour);
         Component chat = Component.empty()
@@ -560,6 +695,40 @@ public final class DragonBehavior {
             // Skyward portal corona.
             level.sendParticles(ParticleTypes.PORTAL,
                     dragon.getX(), dragon.getY() + 6, dragon.getZ(), 600, 12.0, 10.0, 12.0, 1.0);
+        }
+        // Stage V gold-red supernova: huge golden flash, fire columns, warden-sonic-boom roar.
+        if (state.stage >= 5) {
+            level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                            ParticleTypes.FLASH, 1.0f, 0.85f, 0.2f),
+                    dragon.getX(), dragon.getY() + 2, dragon.getZ(), 8, 4.0, 2.0, 4.0, 0.0);
+            for (int ring = 1; ring <= 4; ring++) {
+                double r = ring * 4.0;
+                for (int j = 0; j < 24; j++) {
+                    double a = j / 24.0 * Math.PI * 2;
+                    level.sendParticles(ParticleTypes.FLAME,
+                            dragon.getX() + Math.cos(a) * r,
+                            dragon.getY() + 0.5,
+                            dragon.getZ() + Math.sin(a) * r,
+                            4, 0.1, 0.6, 0.1, 0.0);
+                }
+            }
+            level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                    SoundEvents.WARDEN_SONIC_BOOM, SoundSource.HOSTILE, 10.0f, 0.7f);
+        }
+        // Stage VI void-shatter: everything black, portal storm overhead, triple thunder stinger.
+        if (state.stage >= 6) {
+            level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                            ParticleTypes.FLASH, 0.05f, 0.0f, 0.3f),
+                    dragon.getX(), dragon.getY() + 3, dragon.getZ(), 16, 6.0, 3.0, 6.0, 0.0);
+            strikeLightningAround(level, dragon.getX(), dragon.getY(), dragon.getZ(), 20, 14.0);
+            level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+                    dragon.getX(), dragon.getY() + 2, dragon.getZ(), 400, 10.0, 6.0, 10.0, 0.3);
+            level.sendParticles(ParticleTypes.REVERSE_PORTAL,
+                    dragon.getX(), dragon.getY() + 10, dragon.getZ(), 1000, 16.0, 12.0, 16.0, 1.4);
+            for (int i = 0; i < 5; i++) {
+                level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                        SoundEvents.ENDER_DRAGON_GROWL, SoundSource.HOSTILE, 12.0f, 0.2f + i * 0.1f);
+            }
         }
 
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {

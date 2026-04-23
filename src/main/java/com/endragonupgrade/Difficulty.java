@@ -7,7 +7,9 @@ public enum Difficulty {
     /** Default empowered dragon: 600 HP, 3 stages, tuning unchanged from v2.0. */
     HARD(1.0f, 600.0f, 3, "§5§lСложная"),
     /** Very hard: double HP, stage IV, doubled attack cadence, custom HUD flair. */
-    VERY_HARD(2.0f, 1200.0f, 4, "§4§lОчень сложная");
+    VERY_HARD(2.0f, 1200.0f, 4, "§4§lОчень сложная"),
+    /** Extreme: 2000 HP, 6 stages, ~3x VERY_HARD attack cadence, unique attacks, gold-crimson HUD. */
+    EXTREME(6.0f, 2000.0f, 6, "§6§l§nЭКСТРИМ");
 
     public final float damageMul;
     public final float maxHp;

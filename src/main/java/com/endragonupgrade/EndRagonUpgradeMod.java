@@ -1,5 +1,6 @@
 package com.endragonupgrade;
 
+import com.endragonupgrade.item.ChainOfGodItem;
 import com.endragonupgrade.item.DragonShotItem;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
@@ -19,11 +20,13 @@ public class EndRagonUpgradeMod implements ModInitializer {
         LOGGER.info("[{}] Initializing End Dragon Upgrade mod", MOD_ID);
         NetworkPayloads.registerCommon();
         DragonShotItem.register();
+        ChainOfGodItem.register();
         ChatActivation.register();
         DragonBehavior.register();
 
         CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT).register(output -> {
             output.accept(new ItemStack(DragonShotItem.INSTANCE));
+            output.accept(new ItemStack(ChainOfGodItem.INSTANCE));
         });
     }
 }
