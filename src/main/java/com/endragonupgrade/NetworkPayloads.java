@@ -111,7 +111,71 @@ public final class NetworkPayloads {
     }
 
     /**
-     * Registers all payload types on the clientbound play registry.
+     * Sent by the server after the activation phrase is recognised — tells the client to open
+     * the difficulty-selection menu.
+     */
+    public record OpenMenuPayload() implements CustomPacketPayload {
+        public static final OpenMenuPayload INSTANCE = new OpenMenuPayload();
+        public static final CustomPacketPayload.Type<OpenMenuPayload> TYPE =
+            new Type<>(id("open_menu"));
+        public static final StreamCodec<FriendlyByteBuf, OpenMenuPayload> CODEC =
+            StreamCodec.unit(INSTANCE);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Sent by the client when the player selects a difficulty in the menu.
+     */
+    public record SelectDifficultyPayload(int difficultyId) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<SelectDifficultyPayload> TYPE =
+            new Type<>(id("select_difficulty"));
+        public static final StreamCodec<FriendlyByteBuf, SelectDifficultyPayload> CODEC =
+            CustomPacketPayload.codec(SelectDifficultyPayload::write, SelectDifficultyPayload::new);
+
+        public SelectDifficultyPayload(FriendlyByteBuf buf) {
+            this(buf.readVarInt());
+        }
+
+        public void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(difficultyId);
+        }
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Tells the client which difficulty the currently-tracked dragon is on so the HP bar can pick
+     * the right colourway / extra flair.
+     */
+    public record DifficultyInfoPayload(int difficultyId) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<DifficultyInfoPayload> TYPE =
+            new Type<>(id("difficulty_info"));
+        public static final StreamCodec<FriendlyByteBuf, DifficultyInfoPayload> CODEC =
+            CustomPacketPayload.codec(DifficultyInfoPayload::write, DifficultyInfoPayload::new);
+
+        public DifficultyInfoPayload(FriendlyByteBuf buf) {
+            this(buf.readVarInt());
+        }
+
+        public void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(difficultyId);
+        }
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Registers all payload types on the appropriate play registries.
      * Must be called on both physical sides.
      */
     public static void registerCommon() {
@@ -119,5 +183,8 @@ public final class NetworkPayloads {
         PayloadTypeRegistry.clientboundPlay().register(HealthUpdatePayload.TYPE, HealthUpdatePayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(StageTransitionPayload.TYPE, StageTransitionPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ClearPayload.TYPE, ClearPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(OpenMenuPayload.TYPE, OpenMenuPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(DifficultyInfoPayload.TYPE, DifficultyInfoPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(SelectDifficultyPayload.TYPE, SelectDifficultyPayload.CODEC);
     }
 }

@@ -49,6 +49,18 @@ public final class PurpleFireballAttack {
                 SoundEvents.BLAZE_SHOOT, SoundSource.HOSTILE, 2.0f, 0.6f);
     }
 
+    /**
+     * Fires a dragon fireball in an arbitrary horizontal direction (used by Stage IV radial nova).
+     */
+    public static void fireDirectional(ServerLevel level, EnderDragon dragon, Vec3 direction) {
+        Vec3 origin = dragon.position().add(0, dragon.getBbHeight() * 0.6, 0);
+        DragonFireball fireball = new DragonFireball(level, dragon, direction.normalize());
+        fireball.setPos(origin.x, origin.y, origin.z);
+        level.addFreshEntity(fireball);
+        level.sendParticles(PowerParticleOption.create(ParticleTypes.DRAGON_BREATH, 1.0f),
+                origin.x, origin.y, origin.z, 20, 0.4, 0.4, 0.4, 0.15);
+    }
+
     public static void spawnBreathCloud(ServerLevel level, EnderDragon dragon) {
         Vec3 back = dragon.getHeadLookVector(1.0f).reverse().normalize().scale(3.0);
         double x = dragon.getX() + back.x;

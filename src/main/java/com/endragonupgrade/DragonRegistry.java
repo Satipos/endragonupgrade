@@ -32,8 +32,8 @@ public final class DragonRegistry {
         return states.get(dragon.getUUID());
     }
 
-    public EmpoweredDragonState empower(EnderDragon dragon) {
-        EmpoweredDragonState state = new EmpoweredDragonState(dragon.getUUID(), dragon.getMaxHealth());
+    public EmpoweredDragonState empower(EnderDragon dragon, Difficulty difficulty) {
+        EmpoweredDragonState state = new EmpoweredDragonState(dragon.getUUID(), dragon.getMaxHealth(), difficulty);
         states.put(dragon.getUUID(), state);
         return state;
     }

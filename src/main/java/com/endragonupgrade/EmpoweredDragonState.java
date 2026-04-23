@@ -18,6 +18,7 @@ public final class EmpoweredDragonState {
 
     public final UUID dragonId;
     public final float originalMaxHealth;
+    public final Difficulty difficulty;
 
     public int stage = 0;               // 0 = freezing, 1 / 2 / 3 after freeze finishes
     public int freezeTicksLeft;
@@ -35,9 +36,14 @@ public final class EmpoweredDragonState {
     public static final int SIT_INTERVAL_TICKS = 300;   // schedule next landing ~15s after getting up
     public static final int SIT_HOLD_TICKS = 160;       // sit for ~8s before forcibly taking off
 
-    public EmpoweredDragonState(UUID dragonId, float originalMaxHealth) {
+    // Stage 4 (VERY_HARD only) tickers
+    public int nova4Cooldown = 100;
+    public int pillar4Cooldown = 140;
+
+    public EmpoweredDragonState(UUID dragonId, float originalMaxHealth, Difficulty difficulty) {
         this.dragonId = dragonId;
         this.originalMaxHealth = originalMaxHealth;
+        this.difficulty = difficulty;
         this.freezeTicksLeft = FREEZE_TICKS;
     }
 

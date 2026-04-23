@@ -1,4 +1,13 @@
 {
   "item.endragonupgrade.dragon_shot": "Dragon Shot",
-  "item.endragonupgrade.dragon_shot.desc": "High-damage arrow. Misses leave a lingering dragon-breath cloud."
+  "item.endragonupgrade.dragon_shot.desc": "High-damage arrow. Misses leave a lingering dragon-breath cloud.",
+  "advancement.endragonupgrade.invincible.title": "Invincible",
+  "advancement.endragonupgrade.invincible.description": "You defeated the toughest, deadliest creature in Minecraft. Keep it up!",
+  "endragonupgrade.menu.title": "Empower the Ender Dragon",
+  "endragonupgrade.menu.subtitle": "Pick a difficulty",
+  "endragonupgrade.menu.hard": "Hard",
+  "endragonupgrade.menu.hard.desc": "3 stages, 600 HP, aggressive attacks.",
+  "endragonupgrade.menu.very_hard": "VERY HARD",
+  "endragonupgrade.menu.very_hard.desc": "4 stages, 1200 HP. Twice as fast with radial dragon-novas and fire pillars. Only for the strongest.",
+  "endragonupgrade.menu.cancel": "Cancel"
 }

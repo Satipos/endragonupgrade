@@ -21,13 +21,23 @@ public final class ClientNetworkHandler {
 
     public static void register() {
         ClientPlayNetworking.registerGlobalReceiver(NetworkPayloads.EmpowerStartPayload.TYPE,
-                (payload, ctx) -> ctx.client().execute(() -> onEmpowerStart(payload)));
+                (payload, ctx) -> ctx.client().execute(() -> safe(() -> onEmpowerStart(payload))));
         ClientPlayNetworking.registerGlobalReceiver(NetworkPayloads.HealthUpdatePayload.TYPE,
-                (payload, ctx) -> ctx.client().execute(() -> EmpoweredHealthBar.onHealthUpdate(payload)));
+                (payload, ctx) -> ctx.client().execute(() -> safe(() -> EmpoweredHealthBar.onHealthUpdate(payload))));
         ClientPlayNetworking.registerGlobalReceiver(NetworkPayloads.StageTransitionPayload.TYPE,
-                (payload, ctx) -> ctx.client().execute(() -> ScreenShakeHandler.trigger(payload.newStage())));
+                (payload, ctx) -> ctx.client().execute(() -> safe(() -> ScreenShakeHandler.trigger(payload.newStage()))));
         ClientPlayNetworking.registerGlobalReceiver(NetworkPayloads.ClearPayload.TYPE,
-                (payload, ctx) -> ctx.client().execute(EmpoweredHealthBar::clear));
+                (payload, ctx) -> ctx.client().execute(() -> safe(EmpoweredHealthBar::clear)));
+        ClientPlayNetworking.registerGlobalReceiver(NetworkPayloads.OpenMenuPayload.TYPE,
+                (payload, ctx) -> ctx.client().execute(() -> safe(() -> Minecraft.getInstance().setScreen(new DifficultySelectScreen()))));
+        ClientPlayNetworking.registerGlobalReceiver(NetworkPayloads.DifficultyInfoPayload.TYPE,
+                (payload, ctx) -> ctx.client().execute(() -> safe(() -> EmpoweredHealthBar.onDifficultyInfo(payload))));
+    }
+
+    private static void safe(Runnable r) {
+        try { r.run(); } catch (Throwable t) {
+            com.endragonupgrade.EndRagonUpgradeMod.LOGGER.error("Client packet handler error", t);
+        }
     }
 
     private static void onEmpowerStart(NetworkPayloads.EmpowerStartPayload payload) {

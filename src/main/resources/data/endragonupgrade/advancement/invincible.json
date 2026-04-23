@@ -1,0 +1,29 @@
+{
+  "display": {
+    "icon": {
+      "id": "minecraft:dragon_egg"
+    },
+    "title": {
+      "translate": "advancement.endragonupgrade.invincible.title"
+    },
+    "description": {
+      "translate": "advancement.endragonupgrade.invincible.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false,
+    "background": "minecraft:textures/gui/advancements/backgrounds/end.png"
+  },
+  "criteria": {
+    "defeat_very_hard_dragon": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "defeat_very_hard_dragon"
+    ]
+  ],
+  "sends_telemetry_event": false
+}

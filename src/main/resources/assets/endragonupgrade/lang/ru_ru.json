@@ -1,4 +1,13 @@
 {
   "item.endragonupgrade.dragon_shot": "Драконий Снаряд",
-  "item.endragonupgrade.dragon_shot.desc": "Стрела с мощным уроном. При промахе оставляет облако драконьего дыхания."
+  "item.endragonupgrade.dragon_shot.desc": "Стрела с мощным уроном. При промахе оставляет облако драконьего дыхания.",
+  "advancement.endragonupgrade.invincible.title": "Неуязвимый",
+  "advancement.endragonupgrade.invincible.description": "Ты победил самое сложное, самое опасное существо майнкрафта, так держать!",
+  "endragonupgrade.menu.title": "Призыв усиленного дракона",
+  "endragonupgrade.menu.subtitle": "Выбери уровень сложности",
+  "endragonupgrade.menu.hard": "Сложная",
+  "endragonupgrade.menu.hard.desc": "3 стадии, 600 HP, агрессивные атаки.",
+  "endragonupgrade.menu.very_hard": "ОЧЕНЬ СЛОЖНАЯ",
+  "endragonupgrade.menu.very_hard.desc": "4 стадии, 1200 HP. Вдвое быстрее, с радиальной драконьей новой и огненными колоннами. Только для сильнейших.",
+  "endragonupgrade.menu.cancel": "Отмена"
 }

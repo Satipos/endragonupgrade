@@ -30,18 +30,29 @@ public final class EmpoweredHealthBar {
     private static final int BAR_HEIGHT = 18;
     private static final int PIP_COUNT = 22;
 
-    // Per-stage palette: { deep-fill, mid-fill, highlight, glow }
+    // Per-stage palette (HARD): { deep-fill, mid-fill, highlight, glow }
     private static final int[][] STAGE_COLORS = {
             { 0xFF38005E, 0xFFA825FF, 0xFFEE88FF, 0xFFFFC0FF }, // pre/stage 1
             { 0xFF38005E, 0xFFA825FF, 0xFFEE88FF, 0xFFFFC0FF }, // stage 1 — violet/magenta
             { 0xFF5A1800, 0xFFFF7A1F, 0xFFFFD780, 0xFFFFE0AA }, // stage 2 — molten orange
-            { 0xFF4A0000, 0xFFFF2A2A, 0xFFFF9090, 0xFFFFC0C0 }  // stage 3 — blood crimson
+            { 0xFF4A0000, 0xFFFF2A2A, 0xFFFF9090, 0xFFFFC0C0 }, // stage 3 — blood crimson
+            { 0xFF000000, 0xFF2A2A2A, 0xFFFF2020, 0xFFFF0040 }  // stage 4 — void/black (unused for HARD)
+    };
+
+    // VERY_HARD palette — colder, more aggressive tones.
+    private static final int[][] VH_STAGE_COLORS = {
+            { 0xFF120026, 0xFF6B12A0, 0xFFFF4BFF, 0xFFE080FF }, // pre/stage 1
+            { 0xFF120026, 0xFF6B12A0, 0xFFFF4BFF, 0xFFE080FF }, // stage 1 — violet with hard edge
+            { 0xFF3A0C00, 0xFFFF4A00, 0xFFFF9040, 0xFFFFC080 }, // stage 2 — molten
+            { 0xFF1A0000, 0xFFFF0020, 0xFFFF4060, 0xFFFF9090 }, // stage 3 — crimson
+            { 0xFF000000, 0xFF220022, 0xFFFF0040, 0xFFFF20FF }  // stage 4 — black-magenta void
     };
 
     private static float health = 0f;
     private static float maxHealth = 0f;
     private static float displayedFraction = 0f;
     private static int stage = 0;
+    private static int difficultyId = 0; // 0 = HARD, 1 = VERY_HARD
     private static boolean visible = false;
 
     private EmpoweredHealthBar() {
@@ -61,7 +72,8 @@ public final class EmpoweredHealthBar {
             float blend = Math.min(1f, 0.18f * delta);
             displayedFraction += (target - displayedFraction) * blend;
 
-            int[] palette = STAGE_COLORS[Math.max(0, Math.min(3, stage))];
+            int[][] table = difficultyId == 1 ? VH_STAGE_COLORS : STAGE_COLORS;
+            int[] palette = table[Math.max(0, Math.min(4, stage))];
             int fillDeep = palette[0];
             int fillMid = palette[1];
             int highlight = palette[2];
@@ -78,25 +90,41 @@ public final class EmpoweredHealthBar {
             drawFill(graphics, x, y, fillMid, highlight, glow);
             drawPips(graphics, x, y, highlight);
             drawSideOrnaments(graphics, x, y, highlight, glow);
+            if (difficultyId == 1) {
+                drawVeryHardOrnaments(graphics, x, y, highlight, glow);
+            }
             drawCriticalFlash(graphics, x, y);
             drawHpText(graphics, cx, y);
         });
     }
 
     private static void drawTitle(GuiGraphicsExtractor g, int cx, int y) {
-        String label = "§l§5✦ §d§lE N D E R   D R A G O N §5§l✦";
-        g.centeredText(Minecraft.getInstance().font, label, cx, y - 32, 0xFFFFFFFF);
-        String sub = "§o§7усиленный страж конца";
-        g.centeredText(Minecraft.getInstance().font, sub, cx, y - 20, 0xFFCD9FE0);
+        if (difficultyId == 1) {
+            // VERY_HARD — skull-flanked menacing red title with shimmering flicker.
+            long now = System.currentTimeMillis();
+            boolean flicker = (now / 120) % 13 == 0;
+            String label = flicker
+                    ? "§4§l☠ §c§lE N D E R   D R A G O N §4§l☠"
+                    : "§4§l☠ §c§lE N D E R   D R A G O N §4§l☠";
+            g.centeredText(Minecraft.getInstance().font, label, cx, y - 32, 0xFFFFFFFF);
+            String sub = "§4§lО Ч Е Н Ь   С Л О Ж Н А Я   §8• §c" + (int) health + " §8/ §c" + (int) maxHealth;
+            g.centeredText(Minecraft.getInstance().font, sub, cx, y - 20, 0xFFFFB0B0);
+        } else {
+            String label = "§l§5✦ §d§lE N D E R   D R A G O N §5§l✦";
+            g.centeredText(Minecraft.getInstance().font, label, cx, y - 32, 0xFFFFFFFF);
+            String sub = "§o§7усиленный страж конца";
+            g.centeredText(Minecraft.getInstance().font, sub, cx, y - 20, 0xFFCD9FE0);
+        }
     }
 
     private static void drawStageChips(GuiGraphicsExtractor g, int cx, int y, int[] palette) {
-        String[] labels = { "I", "II", "III" };
-        int chipW = 36, chipH = 14, gap = 8;
-        int total = 3 * chipW + 2 * gap;
+        int stageCount = difficultyId == 1 ? 4 : 3;
+        String[] allLabels = { "I", "II", "III", "IV" };
+        int chipW = 30, chipH = 14, gap = 8;
+        int total = stageCount * chipW + (stageCount - 1) * gap;
         int cxStart = cx - total / 2;
         int chipY = y - 48;
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < stageCount; i++) {
             boolean active = (i + 1) == Math.max(1, stage);
             int cx0 = cxStart + i * (chipW + gap);
             int bg = active ? palette[1] : 0xFF2A0044;
@@ -108,8 +136,38 @@ public final class EmpoweredHealthBar {
             g.fill(cx0, chipY, cx0 + chipW, chipY + chipH, 0xFF0A0012);
             g.fill(cx0 + 1, chipY + 1, cx0 + chipW - 1, chipY + chipH - 1, edge);
             g.fill(cx0 + 2, chipY + 2, cx0 + chipW - 2, chipY + chipH - 2, bg);
-            g.centeredText(Minecraft.getInstance().font, labels[i],
+            g.centeredText(Minecraft.getInstance().font, allLabels[i],
                     cx0 + chipW / 2, chipY + 3, fg);
+        }
+    }
+
+    /**
+     * Extra scare-factor decoration layered over the bar on VERY_HARD — animated electric arcs
+     * jittering along the top/bottom of the rim + subtle diagonal "chain" pattern on the bezel.
+     */
+    private static void drawVeryHardOrnaments(GuiGraphicsExtractor g, int x, int y, int highlight, int glow) {
+        long now = System.currentTimeMillis();
+        // Spikes along the top edge
+        for (int i = 0; i < BAR_WIDTH; i += 6) {
+            int h = ((int) ((now / 50 + i * 7) % 4)) + 2;
+            int sx = x + i;
+            g.fill(sx, y - 2 - h, sx + 2, y - 2, 0xC0000000);
+            g.fill(sx + 1, y - 2 - h + 1, sx + 2, y - 2, highlight);
+        }
+        // Spikes along the bottom edge
+        for (int i = 0; i < BAR_WIDTH; i += 6) {
+            int h = ((int) ((now / 50 + i * 11 + 123) % 4)) + 2;
+            int sx = x + i + 3;
+            g.fill(sx, y + BAR_HEIGHT + 2, sx + 2, y + BAR_HEIGHT + 2 + h, 0xC0000000);
+            g.fill(sx, y + BAR_HEIGHT + 2, sx + 1, y + BAR_HEIGHT + 2 + h - 1, highlight);
+        }
+        // Fast electric arc travelling through the bar
+        int arcX = x + 2 + (int) ((now / 6) % (BAR_WIDTH - 4));
+        for (int i = 0; i < 6; i++) {
+            int ax = arcX + i;
+            if (ax < x + 2 || ax >= x + BAR_WIDTH - 2) continue;
+            int ay = y + 3 + ((int) (now / 20 + i * 3) % (BAR_HEIGHT - 6));
+            g.fill(ax, ay, ax + 1, ay + 1, glow);
         }
     }
 
@@ -245,11 +303,16 @@ public final class EmpoweredHealthBar {
         visible = p.health() > 0f;
     }
 
+    public static void onDifficultyInfo(NetworkPayloads.DifficultyInfoPayload p) {
+        difficultyId = p.difficultyId();
+    }
+
     public static void clear() {
         visible = false;
         health = 0f;
         maxHealth = 0f;
         displayedFraction = 0f;
         stage = 0;
+        difficultyId = 0;
     }
 }

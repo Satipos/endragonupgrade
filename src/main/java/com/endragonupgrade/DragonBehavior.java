@@ -55,22 +55,38 @@ public final class DragonBehavior {
     private static void onServerTick(MinecraftServer server) {
         DragonRegistry registry = DragonRegistry.get(server);
         List<UUID> stale = new ArrayList<>();
+        List<EmpoweredDragonState> deceased = new ArrayList<>();
 
         for (Map.Entry<UUID, EmpoweredDragonState> entry : registry.entries()) {
-            EnderDragon dragon = findDragon(server, entry.getKey());
+            EnderDragon dragon;
+            try {
+                dragon = findDragon(server, entry.getKey());
+            } catch (Throwable t) {
+                EndRagonUpgradeMod.LOGGER.error("findDragon error", t);
+                continue;
+            }
             EmpoweredDragonState state = entry.getValue();
 
             if (dragon == null || !dragon.isAlive()) {
                 stale.add(entry.getKey());
+                deceased.add(state);
                 continue;
             }
 
-            tickOne(server, dragon, state);
+            try {
+                tickOne(server, dragon, state);
+            } catch (Throwable t) {
+                EndRagonUpgradeMod.LOGGER.error("tickOne error for dragon {}", entry.getKey(), t);
+            }
         }
 
-        for (UUID id : stale) {
-            registry.remove(id);
+        for (int i = 0; i < stale.size(); i++) {
+            registry.remove(stale.get(i));
+            EmpoweredDragonState state = deceased.get(i);
             broadcastClear(server);
+            if (state != null && state.difficulty == Difficulty.VERY_HARD && state.stage >= 1) {
+                Advancements.grantInvincibleNearEnd(server, state);
+            }
         }
     }
 
@@ -94,10 +110,10 @@ public final class DragonBehavior {
         }
 
         // Buff MAX_HEALTH the first time we exit freeze (once per dragon) and apply glowing tag.
-        applyEmpowermentBuffs(dragon);
+        applyEmpowermentBuffs(dragon, state);
 
         int prevStage = state.stage;
-        int newStage = computeStage(dragon);
+        int newStage = computeStage(dragon, state);
         if (newStage != prevStage) {
             state.stage = newStage;
             onStageTransition(level, dragon, state);
@@ -165,18 +181,25 @@ public final class DragonBehavior {
         }
     }
 
-    private static int computeStage(EnderDragon dragon) {
+    private static int computeStage(EnderDragon dragon, EmpoweredDragonState state) {
         float pct = dragon.getHealth() / dragon.getMaxHealth();
+        if (state.difficulty == Difficulty.VERY_HARD) {
+            if (pct <= 0.10f) return 4;
+            if (pct <= 0.25f) return 3;
+            if (pct <= 0.50f) return 2;
+            return 1;
+        }
         if (pct <= 0.25f) return 3;
         if (pct <= 0.50f) return 2;
         return 1;
     }
 
-    private static void applyEmpowermentBuffs(EnderDragon dragon) {
+    private static void applyEmpowermentBuffs(EnderDragon dragon, EmpoweredDragonState state) {
+        float targetHp = state.difficulty.maxHp;
         AttributeInstance maxHp = dragon.getAttribute(Attributes.MAX_HEALTH);
-        if (maxHp != null && maxHp.getBaseValue() < EmpoweredDragonState.EMPOWERED_MAX_HEALTH - 0.5) {
-            maxHp.setBaseValue(EmpoweredDragonState.EMPOWERED_MAX_HEALTH);
-            dragon.setHealth(EmpoweredDragonState.EMPOWERED_MAX_HEALTH);
+        if (maxHp != null && maxHp.getBaseValue() < targetHp - 0.5) {
+            maxHp.setBaseValue(targetHp);
+            dragon.setHealth(targetHp);
         }
         if (!dragon.hasGlowingTag()) {
             dragon.setGlowingTag(true);
@@ -248,13 +271,17 @@ public final class DragonBehavior {
             case 80 -> strikeLightningAround(level, cx, cy, cz, 8, 10.0);
             case 100 -> {
                 // Release — animation complete.
-                state.stage = computeStage(dragon);
+                state.stage = computeStage(dragon, state);
                 dragon.getPhaseManager().setPhase(EnderDragonPhase.HOLDING_PATTERN);
                 level.playSound(null, cx, cy, cz, SoundEvents.WITHER_SPAWN,
                         SoundSource.HOSTILE, 6.0f, 0.8f);
                 level.playSound(null, cx, cy, cz, SoundEvents.ENDER_DRAGON_GROWL,
                         SoundSource.HOSTILE, 8.0f, 0.5f);
-                applyEmpowermentBuffs(dragon);
+                applyEmpowermentBuffs(dragon, state);
+                // Broadcast difficulty info to clients so the HP bar can pick the right colourway.
+                for (ServerPlayer p : level.getServer().getPlayerList().getPlayers()) {
+                    ServerPlayNetworking.send(p, new NetworkPayloads.DifficultyInfoPayload(state.difficulty.id()));
+                }
                 onStageTransition(level, dragon, state);
                 broadcastHealth(level.getServer(), dragon, state);
             }
@@ -287,6 +314,13 @@ public final class DragonBehavior {
     // -------------------- Stage combat --------------------
 
     private static void runStageAttacks(ServerLevel level, EnderDragon dragon, EmpoweredDragonState state) {
+        // On VERY_HARD every attack fires approximately twice as often.
+        boolean vh = state.difficulty == Difficulty.VERY_HARD;
+        int charge = vh ? 40 : 80;
+        int endermite = vh ? 30 : 60;
+        int fireball = vh ? 10 : 20;
+        int shockwave = vh ? 40 : 80;
+
         // Faster charges (every ~4s) across all stages.
         if (state.chargeCooldown > 0) state.chargeCooldown--;
         if (state.chargeCooldown == 0) {
@@ -296,20 +330,20 @@ public final class DragonBehavior {
                 if (nearest != null) {
                     dragon.getPhaseManager().setPhase(EnderDragonPhase.CHARGING_PLAYER);
                     if (dragon.getPhaseManager().getCurrentPhase() instanceof
-                            net.minecraft.world.entity.boss.enderdragon.phases.DragonChargePlayerPhase charge) {
-                        charge.setTarget(nearest.position());
+                            net.minecraft.world.entity.boss.enderdragon.phases.DragonChargePlayerPhase ch) {
+                        ch.setTarget(nearest.position());
                     }
                     PurpleFireballAttack.spawnBreathCloud(level, dragon);
                 }
             }
-            state.chargeCooldown = 80 + RNG.nextInt(40); // ~4–6s
+            state.chargeCooldown = charge + RNG.nextInt(charge / 2);
         }
 
         if (state.stage >= 2) {
             if (state.endermiteCooldown > 0) state.endermiteCooldown--;
             if (state.endermiteCooldown == 0) {
-                summonEndermites(level, dragon, 3);
-                state.endermiteCooldown = 60; // 3s
+                summonEndermites(level, dragon, vh ? 5 : 3);
+                state.endermiteCooldown = endermite;
             }
             if (state.fireballCooldown > 0) state.fireballCooldown--;
             if (state.fireballCooldown == 0) {
@@ -317,11 +351,11 @@ public final class DragonBehavior {
                 if (nearest != null) {
                     PurpleFireballAttack.fire(level, dragon, nearest);
                 }
-                state.fireballCooldown = 20 + RNG.nextInt(20); // ~1–2s
+                state.fireballCooldown = fireball + RNG.nextInt(fireball);
             }
             if (state.auraCooldown > 0) state.auraCooldown--;
             if (state.auraCooldown == 0) {
-                applyAuraDamage(level, dragon);
+                applyAuraDamage(level, dragon, state);
                 state.auraCooldown = 40; // 2s
             }
         }
@@ -329,7 +363,6 @@ public final class DragonBehavior {
         if (state.stage >= 3) {
             if (state.shockwaveCooldown > 0) state.shockwaveCooldown--;
             if (!state.shockwaveTell && state.shockwaveCooldown == 20) {
-                // 1s tell: red sound + charging particles
                 state.shockwaveTell = true;
                 level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
                         SoundEvents.WARDEN_SONIC_CHARGE, SoundSource.HOSTILE, 4.0f, 1.0f);
@@ -338,14 +371,77 @@ public final class DragonBehavior {
             }
             if (state.shockwaveCooldown == 0) {
                 ShockwaveAttack.trigger(level, dragon);
-                state.shockwaveCooldown = 80; // 4s
+                state.shockwaveCooldown = shockwave;
                 state.shockwaveTell = false;
+            }
+        }
+
+        // Stage 4 (VERY_HARD only) — radial nova + pillar columns.
+        if (state.stage >= 4) {
+            if (state.nova4Cooldown > 0) state.nova4Cooldown--;
+            if (state.nova4Cooldown == 0) {
+                radialNova(level, dragon);
+                state.nova4Cooldown = 60;
+            }
+            if (state.pillar4Cooldown > 0) state.pillar4Cooldown--;
+            if (state.pillar4Cooldown == 0) {
+                firePillars(level, dragon);
+                state.pillar4Cooldown = 100;
             }
         }
     }
 
-    private static void applyAuraDamage(ServerLevel level, EnderDragon dragon) {
-        double radius = 8.0;
+    /**
+     * Stage 4 attack — radial purple-fireball nova around the dragon.
+     */
+    private static void radialNova(ServerLevel level, EnderDragon dragon) {
+        level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                SoundEvents.ENDER_DRAGON_GROWL, SoundSource.HOSTILE, 6.0f, 0.4f);
+        level.sendParticles(net.minecraft.core.particles.PowerParticleOption.create(
+                        ParticleTypes.DRAGON_BREATH, 1.0f),
+                dragon.getX(), dragon.getY() + 2, dragon.getZ(), 400, 8.0, 3.0, 8.0, 0.4);
+        // 12 fireballs in a horizontal ring.
+        for (int i = 0; i < 12; i++) {
+            double a = 2 * Math.PI * i / 12.0;
+            Vec3 dir = new Vec3(Math.cos(a), 0.0, Math.sin(a));
+            PurpleFireballAttack.fireDirectional(level, dragon, dir);
+        }
+    }
+
+    /**
+     * Stage 4 attack — several vertical pillars of flame at random spots around the player.
+     */
+    private static void firePillars(ServerLevel level, EnderDragon dragon) {
+        Player nearest = level.getNearestPlayer(dragon, 80.0);
+        if (nearest == null) return;
+        Vec3 c = nearest.position();
+        for (int i = 0; i < 5; i++) {
+            double ox = (RNG.nextDouble() - 0.5) * 14.0;
+            double oz = (RNG.nextDouble() - 0.5) * 14.0;
+            double px = c.x + ox;
+            double pz = c.z + oz;
+            // Tell / warning particles at the ground for 1s (client-side-only, best-effort).
+            level.sendParticles(ParticleTypes.FLAME, px, c.y, pz, 40, 0.5, 0.1, 0.5, 0.02);
+            level.sendParticles(ParticleTypes.SMALL_FLAME, px, c.y, pz, 60, 0.4, 0.2, 0.4, 0.03);
+            level.sendParticles(net.minecraft.core.particles.PowerParticleOption.create(
+                            ParticleTypes.DRAGON_BREATH, 1.0f),
+                    px, c.y + 3, pz, 120, 0.5, 3.0, 0.5, 0.3);
+            // Damage anyone standing in the column RIGHT NOW (no delay — the warning lands at tell-time).
+            AABB col = new AABB(px - 1.5, c.y - 2, pz - 1.5, px + 1.5, c.y + 6, pz + 1.5);
+            DamageSource src = dragon.damageSources().mobAttack(dragon);
+            for (Player p : level.getEntitiesOfClass(Player.class, col,
+                    pp -> pp.isAlive() && !pp.isCreative() && !pp.isSpectator())) {
+                p.hurtServer(level, src, 8.0f);
+                p.setRemainingFireTicks(80);
+            }
+            level.playSound(null, px, c.y, pz, SoundEvents.BLAZE_SHOOT,
+                    SoundSource.HOSTILE, 3.0f, 0.6f);
+        }
+    }
+
+    private static void applyAuraDamage(ServerLevel level, EnderDragon dragon, EmpoweredDragonState state) {
+        double radius = state.stage >= 4 ? 12.0 : 8.0;
+        float damage = state.stage >= 4 ? 4.0f : 2.0f;
         Vec3 c = dragon.position();
         AABB box = new AABB(c.x - radius, c.y - radius, c.z - radius,
                 c.x + radius, c.y + radius, c.z + radius);
@@ -356,9 +452,12 @@ public final class DragonBehavior {
         DamageSource source = dragon.damageSources().mobAttack(dragon);
         for (Player p : nearby) {
             if (p.distanceToSqr(dragon) > radius * radius) continue;
-            p.hurtServer(level, source, 2.0f);
+            p.hurtServer(level, source, damage);
             p.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 60, 1));
             p.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 60, 0));
+            if (state.stage >= 4) {
+                p.addEffect(new MobEffectInstance(MobEffects.WITHER, 60, 0));
+            }
             level.sendParticles(ParticleTypes.DAMAGE_INDICATOR,
                     p.getX(), p.getY() + 1, p.getZ(), 6, 0.3, 0.3, 0.3, 0.1);
         }
@@ -394,11 +493,13 @@ public final class DragonBehavior {
         ChatFormatting colour = switch (state.stage) {
             case 2 -> ChatFormatting.GOLD;
             case 3 -> ChatFormatting.RED;
+            case 4 -> ChatFormatting.DARK_RED;
             default -> ChatFormatting.LIGHT_PURPLE;
         };
         String roman = switch (state.stage) {
             case 2 -> "II";
             case 3 -> "III";
+            case 4 -> "IV";
             default -> "I";
         };
         Component title = Component.literal("⚡ Ярость " + roman + " ⚡")
@@ -407,6 +508,7 @@ public final class DragonBehavior {
             case 1 -> "Эндер Дракон разбужен";
             case 2 -> "Эндер Дракон освобождает тьму";
             case 3 -> "Последний рубеж — он не будет щадить";
+            case 4 -> "КАТАКЛИЗМ — он стал неуязвим ко всему";
             default -> "";
         }).withStyle(colour);
         Component chat = Component.empty()
@@ -432,15 +534,33 @@ public final class DragonBehavior {
         strikeLightningAround(level, dragon.getX(), dragon.getY(), dragon.getZ(),
                 4 + state.stage, 6.0);
 
-        // Giant dragon-breath bloom.
+        // Giant dragon-breath bloom — scaled up at stage 4.
+        int bloomCount = state.stage >= 4 ? 500 : 200;
         level.sendParticles(
                 net.minecraft.core.particles.PowerParticleOption.create(ParticleTypes.DRAGON_BREATH, 1.0f),
                 dragon.getX(), dragon.getY() + 2, dragon.getZ(),
-                200, 6.0, 4.0, 6.0, 0.4);
+                bloomCount, 6.0, 4.0, 6.0, 0.4);
         level.sendParticles(ParticleTypes.EXPLOSION_EMITTER,
-                dragon.getX(), dragon.getY() + 1, dragon.getZ(), 3, 3.0, 1.5, 3.0, 0.0);
+                dragon.getX(), dragon.getY() + 1, dragon.getZ(),
+                state.stage >= 4 ? 8 : 3, 3.0, 1.5, 3.0, 0.0);
         level.sendParticles(ParticleTypes.END_ROD,
-                dragon.getX(), dragon.getY(), dragon.getZ(), 120, 4.0, 4.0, 4.0, 0.6);
+                dragon.getX(), dragon.getY(), dragon.getZ(),
+                state.stage >= 4 ? 240 : 120, 4.0, 4.0, 4.0, 0.6);
+
+        // Stage IV cataclysm: massive beacon beam + extra thunder + dense portal corona.
+        if (state.stage >= 4) {
+            level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                            ParticleTypes.FLASH, 1.0f, 0.1f, 0.1f),
+                    dragon.getX(), dragon.getY() + 2, dragon.getZ(), 4, 2.0, 1.0, 2.0, 0.0);
+            strikeLightningAround(level, dragon.getX(), dragon.getY(), dragon.getZ(), 12, 10.0);
+            for (int i = 0; i < 3; i++) {
+                level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                        SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.HOSTILE, 10.0f, 0.4f + i * 0.15f);
+            }
+            // Skyward portal corona.
+            level.sendParticles(ParticleTypes.PORTAL,
+                    dragon.getX(), dragon.getY() + 6, dragon.getZ(), 600, 12.0, 10.0, 12.0, 1.0);
+        }
 
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             ServerPlayNetworking.send(p, new NetworkPayloads.StageTransitionPayload(state.stage));
@@ -448,10 +568,12 @@ public final class DragonBehavior {
     }
 
     private static void broadcastHealth(MinecraftServer server, EnderDragon dragon, EmpoweredDragonState state) {
-        NetworkPayloads.HealthUpdatePayload payload = new NetworkPayloads.HealthUpdatePayload(
+        NetworkPayloads.HealthUpdatePayload health = new NetworkPayloads.HealthUpdatePayload(
                 dragon.getId(), dragon.getHealth(), dragon.getMaxHealth(), Math.max(1, state.stage));
+        NetworkPayloads.DifficultyInfoPayload diff = new NetworkPayloads.DifficultyInfoPayload(state.difficulty.id());
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-            ServerPlayNetworking.send(p, payload);
+            ServerPlayNetworking.send(p, health);
+            ServerPlayNetworking.send(p, diff);
         }
     }
 
