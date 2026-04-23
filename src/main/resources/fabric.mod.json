@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "endragonupgrade",
+	"version": "${version}",
+	"name": "End Dragon Upgrade",
+	"description": "Turn the Ender Dragon into an empowered 3-stage boss with new attacks, triggered by a secret chat phrase.",
+	"authors": [
+		"Амир"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/Satipos/endragonupgrade"
+	},
+	"license": "CC0-1.0",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.endragonupgrade.EndRagonUpgradeMod"
+		],
+		"client": [
+			"com.endragonupgrade.client.EndRagonUpgradeClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.2",
+		"minecraft": "~26.1.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
