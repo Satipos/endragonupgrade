@@ -1,6 +1,10 @@
 package com.endragonupgrade;
 
+import com.endragonupgrade.item.DragonShotItem;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
+import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,7 +18,12 @@ public class EndRagonUpgradeMod implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("[{}] Initializing End Dragon Upgrade mod", MOD_ID);
         NetworkPayloads.registerCommon();
+        DragonShotItem.register();
         ChatActivation.register();
         DragonBehavior.register();
+
+        CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT).register(output -> {
+            output.accept(new ItemStack(DragonShotItem.INSTANCE));
+        });
     }
 }

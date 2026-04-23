@@ -29,6 +29,12 @@ public final class EmpoweredDragonState {
     public int tickCounter = 0;
     public boolean shockwaveTell = false; // windup signalling shockwave in 1s
 
+    // v2.0: periodic landings so players get more melee openings.
+    public int sitScheduleCooldown = 300;     // first landing triggers ~15s after freeze ends
+    public int sitDurationTicksLeft = 0;      // >0 while dragon is being held on the podium
+    public static final int SIT_INTERVAL_TICKS = 300;   // schedule next landing ~15s after getting up
+    public static final int SIT_HOLD_TICKS = 160;       // sit for ~8s before forcibly taking off
+
     public EmpoweredDragonState(UUID dragonId, float originalMaxHealth) {
         this.dragonId = dragonId;
         this.originalMaxHealth = originalMaxHealth;
