@@ -44,6 +44,17 @@ public final class EmpoweredDragonState {
     public int rainCooldown = 60;
     public int cloneCooldown = 160;
 
+    // Stage 7/8/9/10 (IMPOSSIBLE only) tickers
+    public int blackholeCooldown = 300;   // signature — stage 7
+    public int meteorSwarmCooldown = 200; // signature — stage 9
+    public int realityTearCooldown = 120; // signature — stage 10
+    public int voidWaveCooldown = 60;     // stage 8 — repeating void ring shockwaves
+    public int phantomStrikeCooldown = 80;// stage 8/9/10 — teleport strikes
+
+    // Stage 7 Black Hole — when > 0, a singularity is active at (bhX, bhY, bhZ).
+    public int blackholeTicks = 0;
+    public double bhX, bhY, bhZ;
+
     // Chain-of-God freeze: while > 0 the dragon is held still (no attacks, no movement, no knockback).
     public int chainFreezeTicksLeft = 0;
     public static final int CHAIN_FREEZE_TICKS = 200; // 10 s at 20tps

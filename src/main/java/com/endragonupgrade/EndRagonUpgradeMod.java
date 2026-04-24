@@ -14,6 +14,8 @@ public class EndRagonUpgradeMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public static final String ACTIVATION_PHRASE = "Endo espo dragonio di quoro.";
+    /** v3.5 — shortcut that skips the menu and empowers the dragon on IMPOSSIBLE difficulty. */
+    public static final String IMPOSSIBLE_PHRASE = "Endo worldio expansia";
 
     @Override
     public void onInitialize() {

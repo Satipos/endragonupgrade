@@ -22,11 +22,24 @@ public final class ChatActivation {
             try {
                 String raw = message.signedContent();
                 if (raw == null) return true;
-                if (!raw.trim().equals(EndRagonUpgradeMod.ACTIVATION_PHRASE)) return true;
-                // Defer actual activation to the menu — just open it.
-                openMenuFor(sender);
-                // Cancel the chat message so the secret phrase isn't publicly broadcast.
-                return false;
+                String trimmed = raw.trim();
+                if (trimmed.equals(EndRagonUpgradeMod.ACTIVATION_PHRASE)) {
+                    // Defer actual activation to the menu — just open it.
+                    openMenuFor(sender);
+                    return false;
+                }
+                if (trimmed.equals(EndRagonUpgradeMod.IMPOSSIBLE_PHRASE)) {
+                    // v3.5 shortcut — skip menu, empower directly on IMPOSSIBLE.
+                    sender.level().getServer().execute(() -> {
+                        try {
+                            applySelection(sender, Difficulty.IMPOSSIBLE);
+                        } catch (Throwable t) {
+                            EndRagonUpgradeMod.LOGGER.error("IMPOSSIBLE direct activation failed", t);
+                        }
+                    });
+                    return false;
+                }
+                return true;
             } catch (Throwable t) {
                 EndRagonUpgradeMod.LOGGER.error("Chat activation error", t);
                 return true;

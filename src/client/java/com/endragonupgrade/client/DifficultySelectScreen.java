@@ -16,12 +16,12 @@ import net.minecraft.network.chat.Component;
  * visually to hover. Each card: themed colour, title, value stats, description, stage chips.
  */
 public class DifficultySelectScreen extends Screen {
-    private static final int PANEL_W = 520;
-    private static final int PANEL_H = 320;
+    private static final int PANEL_W = 620;
+    private static final int PANEL_H = 340;
 
-    private static final int CARD_W = 148;
-    private static final int CARD_H = 220;
-    private static final int CARD_GAP = 18;
+    private static final int CARD_W = 136;
+    private static final int CARD_H = 230;
+    private static final int CARD_GAP = 14;
 
     public DifficultySelectScreen() {
         super(Component.translatable("endragonupgrade.menu.title"));
@@ -34,7 +34,7 @@ public class DifficultySelectScreen extends Screen {
         int panelTop = cy - PANEL_H / 2;
         int panelLeft = cx - PANEL_W / 2;
         int cardY = panelTop + 60;
-        int cardsTotal = 3 * CARD_W + 2 * CARD_GAP;
+        int cardsTotal = 4 * CARD_W + 3 * CARD_GAP;
         int cardsLeft = cx - cardsTotal / 2;
 
         this.addRenderableWidget(new DifficultyCard(cardsLeft, cardY,
@@ -44,7 +44,7 @@ public class DifficultySelectScreen extends Screen {
                 "600 HP  •  3 стадии",
                 Component.translatable("endragonupgrade.menu.hard.desc")));
 
-        this.addRenderableWidget(new DifficultyCard(cardsLeft + CARD_W + CARD_GAP, cardY,
+        this.addRenderableWidget(new DifficultyCard(cardsLeft + (CARD_W + CARD_GAP), cardY,
                 1,
                 0xFFFF2040, 0xFF800010,
                 Component.translatable("endragonupgrade.menu.very_hard").withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD),
@@ -57,6 +57,13 @@ public class DifficultySelectScreen extends Screen {
                 Component.translatable("endragonupgrade.menu.extreme").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD, ChatFormatting.UNDERLINE),
                 "2000 HP  •  6 стадий",
                 Component.translatable("endragonupgrade.menu.extreme.desc")));
+
+        this.addRenderableWidget(new DifficultyCard(cardsLeft + 3 * (CARD_W + CARD_GAP), cardY,
+                3,
+                0xFFFF30FF, 0xFF300030,
+                Component.translatable("endragonupgrade.menu.impossible").withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD, ChatFormatting.UNDERLINE),
+                "5000 HP  •  10 стадий",
+                Component.translatable("endragonupgrade.menu.impossible.desc")));
 
         // Cancel button at the bottom.
         this.addRenderableWidget(Button.builder(
@@ -243,19 +250,29 @@ public class DifficultySelectScreen extends Screen {
             }
 
             // Stage chips at the bottom — count depends on difficulty tier.
-            int chipCount = difficultyId == 0 ? 3 : difficultyId == 1 ? 4 : 6;
-            String[] romans = { "I", "II", "III", "IV", "V", "VI" };
-            int chipW = 14;
+            int chipCount = difficultyId == 0 ? 3 : difficultyId == 1 ? 4
+                    : difficultyId == 2 ? 6 : 10;
+            String[] romans = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X" };
+            // For 10 chips, use two rows of 5 to keep chips readable.
+            int chipRows = chipCount >= 10 ? 2 : 1;
+            int perRow = chipCount / chipRows;
+            int chipW = chipCount >= 10 ? 12 : chipCount == 6 ? 14 : 16;
             int chipH = 9;
             int gap = 3;
-            int totalW = chipCount * chipW + (chipCount - 1) * gap;
+            int rowGap = 3;
+            int totalW = perRow * chipW + (perRow - 1) * gap;
             int chipStartX = x + w / 2 - totalW / 2;
-            int chipY = y + h - 18;
-            for (int i = 0; i < chipCount; i++) {
-                int cx0 = chipStartX + i * (chipW + gap);
-                g.fill(cx0 - 1, chipY - 1, cx0 + chipW + 1, chipY + chipH + 1, 0xFF000000);
-                g.fill(cx0, chipY, cx0 + chipW, chipY + chipH, (0xC0 << 24) | (accent & 0x00FFFFFF));
-                g.centeredText(getFont(), romans[i], cx0 + chipW / 2, chipY + 1, 0xFFFFFFFF);
+            int chipY = y + h - 18 - (chipRows - 1) * (chipH + rowGap);
+            for (int row = 0; row < chipRows; row++) {
+                for (int i = 0; i < perRow; i++) {
+                    int idx = row * perRow + i;
+                    if (idx >= chipCount) break;
+                    int cx0 = chipStartX + i * (chipW + gap);
+                    int cy0 = chipY + row * (chipH + rowGap);
+                    g.fill(cx0 - 1, cy0 - 1, cx0 + chipW + 1, cy0 + chipH + 1, 0xFF000000);
+                    g.fill(cx0, cy0, cx0 + chipW, cy0 + chipH, (0xC0 << 24) | (accent & 0x00FFFFFF));
+                    g.centeredText(getFont(), romans[idx], cx0 + chipW / 2, cy0 + 1, 0xFFFFFFFF);
+                }
             }
         }
 

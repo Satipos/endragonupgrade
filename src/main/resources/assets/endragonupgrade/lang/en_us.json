@@ -13,5 +13,7 @@
   "endragonupgrade.menu.very_hard.desc": "4 stages, 1200 HP. Twice as fast, radial dragon-novas and fire pillars. Only for the strongest.",
   "endragonupgrade.menu.extreme": "EXTREME",
   "endragonupgrade.menu.extreme.desc": "6 stages, 2000 HP. Three times harder than VERY HARD. Fire rain, shadow clones, merciless aura.",
+  "endragonupgrade.menu.impossible": "IMPOSSIBLE",
+  "endragonupgrade.menu.impossible.desc": "10 stages, 5000 HP. Black holes, void waves, meteor swarms, reality tear. Direct-trigger phrase: Endo worldio expansia.",
   "endragonupgrade.menu.cancel": "Cancel"
 }

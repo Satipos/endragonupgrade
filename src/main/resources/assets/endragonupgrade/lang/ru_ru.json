@@ -13,5 +13,7 @@
   "endragonupgrade.menu.very_hard.desc": "4 стадии, 1200 HP. Вдвое быстрее, с радиальной драконьей новой и огненными колоннами. Только для сильнейших.",
   "endragonupgrade.menu.extreme": "ЭКСТРИМ",
   "endragonupgrade.menu.extreme.desc": "6 стадий, 2000 HP. В три раза сложнее ОЧЕНЬ СЛОЖНОЙ. Огненный дождь, теневые клоны, безжалостная аура.",
+  "endragonupgrade.menu.impossible": "НЕВОЗМОЖНО",
+  "endragonupgrade.menu.impossible.desc": "10 стадий, 5000 HP. Чёрная дыра, пустотные волны, метеоритный рой, разрыв реальности. Фраза для прямого вызова: Endo worldio expansia.",
   "endragonupgrade.menu.cancel": "Отмена"
 }

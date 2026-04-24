@@ -59,6 +59,21 @@ public final class EmpoweredHealthBar {
             { 0xFF000000, 0xFF400040, 0xFFFFD040, 0xFFFFFF80 }  // stage 6 — black void with gold
     };
 
+    // IMPOSSIBLE palette — 10 stages, void-black → cosmic-magenta → supernova-white.
+    private static final int[][] IM_STAGE_COLORS = {
+            { 0xFF0A0014, 0xFF3A0066, 0xFF8040FF, 0xFFA080FF }, // pre/1 — dark violet
+            { 0xFF0A0014, 0xFF3A0066, 0xFF8040FF, 0xFFA080FF }, // 1
+            { 0xFF120022, 0xFF6010B0, 0xFFB060FF, 0xFFD0A0FF }, // 2
+            { 0xFF1A0030, 0xFF9020D0, 0xFFE080FF, 0xFFFFB0FF }, // 3
+            { 0xFF280000, 0xFFC02060, 0xFFFF60A0, 0xFFFFA0C0 }, // 4 — blood-magenta
+            { 0xFF2A0000, 0xFFFF0040, 0xFFFF5060, 0xFFFFA0A0 }, // 5 — crimson
+            { 0xFF00181A, 0xFF003A5A, 0xFF00B0FF, 0xFF60E0FF }, // 6 — void teal
+            { 0xFF000000, 0xFF2A003A, 0xFF400040, 0xFF8000C0 }, // 7 — black hole
+            { 0xFF000020, 0xFF0040A0, 0xFF4080FF, 0xFF80C0FF }, // 8 — void wave
+            { 0xFF400000, 0xFFE02010, 0xFFFF8040, 0xFFFFE0A0 }, // 9 — meteor red-hot
+            { 0xFF200020, 0xFF8000C0, 0xFFFFFFFF, 0xFFFFFFFF }  // 10 — reality tear supernova
+    };
+
     private static float health = 0f;
     private static float maxHealth = 0f;
     private static float displayedFraction = 0f;
@@ -83,7 +98,10 @@ public final class EmpoweredHealthBar {
             float blend = Math.min(1f, 0.18f * delta);
             displayedFraction += (target - displayedFraction) * blend;
 
-            int[][] table = difficultyId == 2 ? EX_STAGE_COLORS : difficultyId == 1 ? VH_STAGE_COLORS : STAGE_COLORS;
+            int[][] table = difficultyId == 3 ? IM_STAGE_COLORS
+                    : difficultyId == 2 ? EX_STAGE_COLORS
+                    : difficultyId == 1 ? VH_STAGE_COLORS
+                    : STAGE_COLORS;
             int[] palette = table[Math.max(0, Math.min(table.length - 1, stage))];
             int fillDeep = palette[0];
             int fillMid = palette[1];
@@ -107,12 +125,28 @@ public final class EmpoweredHealthBar {
             if (difficultyId == 2) {
                 drawExtremeOrnaments(graphics, x, y, highlight, glow);
             }
+            if (difficultyId == 3) {
+                drawImpossibleOrnaments(graphics, x, y, highlight, glow);
+            }
             drawCriticalFlash(graphics, x, y);
             drawHpText(graphics, cx, y);
         });
     }
 
     private static void drawTitle(GuiGraphicsExtractor g, int cx, int y) {
+        if (difficultyId == 3) {
+            // IMPOSSIBLE — void-black with flickering obfuscated sigils and supernova subtitle.
+            long now = System.currentTimeMillis();
+            int flick = (int) ((now / 120) % 3);
+            String sigilL = flick == 0 ? "§0§l§k##" : flick == 1 ? "§c§l§k##" : "§d§l§k##";
+            String sigilR = flick == 0 ? "§d§l§k##" : flick == 1 ? "§0§l§k##" : "§c§l§k##";
+            String label = sigilL + "§r  §4§l§nE N D E R   D R A G O N§r  " + sigilR;
+            g.centeredText(Minecraft.getInstance().font, label, cx, y - 32, 0xFFFFFFFF);
+            String sub = "§4§l§n✹ Н Е В О З М О Ж Н О ✹§r  §8• §c"
+                    + (int) health + " §8/ §c" + (int) maxHealth;
+            g.centeredText(Minecraft.getInstance().font, sub, cx, y - 20, 0xFFFF80C0);
+            return;
+        }
         if (difficultyId == 2) {
             // EXTREME — gold crown + crimson title with pulsing "⚔" swords.
             long now = System.currentTimeMillis();
@@ -137,11 +171,11 @@ public final class EmpoweredHealthBar {
     }
 
     private static void drawStageChips(GuiGraphicsExtractor g, int cx, int y, int[] palette) {
-        int stageCount = difficultyId == 2 ? 6 : difficultyId == 1 ? 4 : 3;
-        String[] allLabels = { "I", "II", "III", "IV", "V", "VI" };
-        int chipW = difficultyId == 2 ? 22 : 30;
+        int stageCount = difficultyId == 3 ? 10 : difficultyId == 2 ? 6 : difficultyId == 1 ? 4 : 3;
+        String[] allLabels = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X" };
+        int chipW = difficultyId == 3 ? 16 : difficultyId == 2 ? 22 : 30;
         int chipH = 14;
-        int gap = difficultyId == 2 ? 6 : 8;
+        int gap = difficultyId == 3 ? 4 : difficultyId == 2 ? 6 : 8;
         int total = stageCount * chipW + (stageCount - 1) * gap;
         int cxStart = cx - total / 2;
         int chipY = y - 48;
@@ -225,6 +259,68 @@ public final class EmpoweredHealthBar {
             int alpha = 0x80 + (int) (Math.sin(t * 0.5) * 0x40);
             int col = (Math.max(0, Math.min(0xFF, alpha)) << 24) | 0xFFD050;
             g.fill(ex, ey, ex + 1, ey + 1, col);
+        }
+    }
+
+    /**
+     * IMPOSSIBLE ornaments — cosmic void backdrop: twin rotating particle orbits around the bar,
+     * jagged magenta glyphs at either end, and a "heartbeat" red pulse below the bar that
+     * speeds up as HP drops. Designed to feel oppressive and unworldly.
+     */
+    private static void drawImpossibleOrnaments(GuiGraphicsExtractor g, int x, int y, int highlight, int glow) {
+        long now = System.currentTimeMillis();
+        int cx = x + BAR_WIDTH / 2;
+        int cy = y + BAR_HEIGHT / 2;
+        // --- Cosmic orbit: two rings of moving stars around the bar.
+        for (int ring = 0; ring < 2; ring++) {
+            double radX = BAR_WIDTH / 2.0 + 18 + ring * 8;
+            double radY = BAR_HEIGHT / 2.0 + 14 + ring * 8;
+            double speed = ring == 0 ? 0.0010 : -0.0006;
+            int count = 14;
+            for (int i = 0; i < count; i++) {
+                double a = now * speed + i * (Math.PI * 2.0 / count);
+                int px = cx + (int) (Math.cos(a) * radX);
+                int py = cy + (int) (Math.sin(a) * radY);
+                int alpha = 0x90 + (int) (Math.sin(now * 0.004 + i) * 0x40);
+                int col = (Math.max(0, Math.min(0xFF, alpha)) << 24) | (glow & 0x00FFFFFF);
+                g.fill(px, py, px + 2, py + 2, col);
+                g.fill(px - 1, py, px + 3, py + 1, (col & 0x00FFFFFF) | 0x40000000);
+            }
+        }
+        // --- Jagged magenta glyphs flanking the bar ends (void signature).
+        int[] glyphX = { -18, BAR_WIDTH + 16 };
+        for (int side = 0; side < 2; side++) {
+            int gx = x + glyphX[side];
+            int shake = ((int) (now / 180 + side * 19)) % 3 - 1;
+            for (int row = 0; row < 14; row++) {
+                int bits = (row * 31 + side * 17 + (int) (now / 260)) & 7;
+                for (int col = 0; col < 3; col++) {
+                    if ((bits & (1 << col)) != 0) {
+                        int px = gx + col + shake;
+                        int py = y + 2 + row;
+                        g.fill(px, py, px + 1, py + 1, 0xFFFF30FF);
+                    }
+                }
+            }
+        }
+        // --- Heartbeat under the bar: faster as HP approaches 0.
+        float frac = Math.max(0f, Math.min(1f, displayedFraction));
+        long beatPeriod = Math.max(200L, (long) (300 + frac * 700));
+        long phase = now % beatPeriod;
+        float pulse = phase < beatPeriod / 4 ? 1.0f - phase / (float) (beatPeriod / 4) : 0f;
+        int beatAlpha = (int) (0xA0 * pulse);
+        if (beatAlpha > 0) {
+            int colour = (beatAlpha << 24) | 0x00FF2040;
+            // Pulse line
+            g.fill(x + 20, y + BAR_HEIGHT + 8, x + BAR_WIDTH - 20, y + BAR_HEIGHT + 10, colour);
+            // Small crown above bar.
+            g.fill(cx - 2, y - 8, cx + 2, y - 6, colour);
+        }
+        // --- Cosmic aura shadow just beyond the frame (violet halo).
+        for (int k = 8; k >= 4; k--) {
+            int a = 0x0A + (8 - k) * 0x08;
+            int c = (a << 24) | 0x008000FF;
+            g.fill(x - k, y - k, x + BAR_WIDTH + k, y + BAR_HEIGHT + k, c);
         }
     }
 

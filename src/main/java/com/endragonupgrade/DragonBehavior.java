@@ -230,6 +230,19 @@ public final class DragonBehavior {
 
     private static int computeStage(EnderDragon dragon, EmpoweredDragonState state) {
         float pct = dragon.getHealth() / dragon.getMaxHealth();
+        if (state.difficulty == Difficulty.IMPOSSIBLE) {
+            // 10 stages. Thresholds chosen so each phase is noticeably shorter than the previous.
+            if (pct <= 0.03f) return 10; // Reality Tear
+            if (pct <= 0.08f) return 9;  // Meteor Swarm
+            if (pct <= 0.15f) return 8;  // Void Waves
+            if (pct <= 0.25f) return 7;  // Black Hole
+            if (pct <= 0.35f) return 6;
+            if (pct <= 0.45f) return 5;
+            if (pct <= 0.55f) return 4;
+            if (pct <= 0.70f) return 3;
+            if (pct <= 0.85f) return 2;
+            return 1;
+        }
         if (state.difficulty == Difficulty.EXTREME) {
             // 6 stages at 5%, 15%, 30%, 50%, 70%, >70%.
             if (pct <= 0.05f) return 6;
@@ -370,13 +383,19 @@ public final class DragonBehavior {
     // -------------------- Stage combat --------------------
 
     private static void runStageAttacks(ServerLevel level, EnderDragon dragon, EmpoweredDragonState state) {
+        // Tick the persistent black-hole field independently (stage 7 signature).
+        if (state.blackholeTicks > 0) {
+            tickBlackhole(level, dragon, state);
+        }
+
         // Attack cadence by difficulty.
         boolean vh = state.difficulty == Difficulty.VERY_HARD;
         boolean ex = state.difficulty == Difficulty.EXTREME;
-        int charge = ex ? 25 : vh ? 40 : 80;
-        int endermite = ex ? 20 : vh ? 30 : 60;
-        int fireball = ex ? 6 : vh ? 10 : 20;
-        int shockwave = ex ? 30 : vh ? 40 : 80;
+        boolean imp = state.difficulty == Difficulty.IMPOSSIBLE;
+        int charge = imp ? 15 : ex ? 25 : vh ? 40 : 80;
+        int endermite = imp ? 12 : ex ? 20 : vh ? 30 : 60;
+        int fireball = imp ? 3 : ex ? 6 : vh ? 10 : 20;
+        int shockwave = imp ? 18 : ex ? 30 : vh ? 40 : 80;
 
         // Faster charges (every ~4s) across all stages.
         if (state.chargeCooldown > 0) state.chargeCooldown--;
@@ -433,37 +452,263 @@ public final class DragonBehavior {
             }
         }
 
-        // Stage 4 (VERY_HARD and EXTREME) — radial nova + pillar columns.
+        // Stage 4 (VERY_HARD, EXTREME, IMPOSSIBLE) — radial nova + pillar columns.
         if (state.stage >= 4) {
             if (state.nova4Cooldown > 0) state.nova4Cooldown--;
             if (state.nova4Cooldown == 0) {
                 radialNova(level, dragon);
-                state.nova4Cooldown = ex ? 40 : 60;
+                state.nova4Cooldown = imp ? 28 : ex ? 40 : 60;
             }
             if (state.pillar4Cooldown > 0) state.pillar4Cooldown--;
             if (state.pillar4Cooldown == 0) {
                 firePillars(level, dragon);
-                state.pillar4Cooldown = ex ? 70 : 100;
+                state.pillar4Cooldown = imp ? 50 : ex ? 70 : 100;
             }
         }
 
-        // Stage 5 (EXTREME only) — continuous fireball rain around every player.
-        if (state.stage >= 5 && ex) {
+        // Stage 5 (EXTREME & IMPOSSIBLE) — continuous fireball rain around every player.
+        if (state.stage >= 5 && (ex || imp)) {
             if (state.rainCooldown > 0) state.rainCooldown--;
             if (state.rainCooldown == 0) {
                 fireRain(level, dragon);
-                state.rainCooldown = 40;
+                state.rainCooldown = imp ? 24 : 40;
             }
         }
 
-        // Stage 6 (EXTREME only) — call shadow clones that burst breath around players.
-        if (state.stage >= 6 && ex) {
+        // Stage 6 (EXTREME & IMPOSSIBLE) — shadow clones that burst breath around players.
+        if (state.stage >= 6 && (ex || imp)) {
             if (state.cloneCooldown > 0) state.cloneCooldown--;
             if (state.cloneCooldown == 0) {
                 shadowBurst(level, dragon);
-                state.cloneCooldown = 80;
+                state.cloneCooldown = imp ? 50 : 80;
             }
         }
+
+        // -------- IMPOSSIBLE signature stages --------
+        if (imp && state.stage >= 7) {
+            // Stage 7 — periodic BLACK HOLE singularity spawn.
+            if (state.blackholeCooldown > 0) state.blackholeCooldown--;
+            if (state.blackholeCooldown == 0 && state.blackholeTicks == 0) {
+                spawnBlackhole(level, dragon, state);
+                state.blackholeCooldown = 300; // spawn a new one every 15 s
+            }
+        }
+        if (imp && state.stage >= 8) {
+            // Stage 8 — repeating VOID WAVE shockwaves plus teleport strikes.
+            if (state.voidWaveCooldown > 0) state.voidWaveCooldown--;
+            if (state.voidWaveCooldown == 0) {
+                voidWave(level, dragon);
+                state.voidWaveCooldown = 45;
+            }
+            if (state.phantomStrikeCooldown > 0) state.phantomStrikeCooldown--;
+            if (state.phantomStrikeCooldown == 0) {
+                phantomStrike(level, dragon);
+                state.phantomStrikeCooldown = state.stage >= 10 ? 30 : state.stage >= 9 ? 45 : 60;
+            }
+        }
+        if (imp && state.stage >= 9) {
+            // Stage 9 — METEOR SWARM signature.
+            if (state.meteorSwarmCooldown > 0) state.meteorSwarmCooldown--;
+            if (state.meteorSwarmCooldown == 0) {
+                meteorSwarm(level, dragon);
+                state.meteorSwarmCooldown = 120;
+            }
+        }
+        if (imp && state.stage >= 10) {
+            // Stage 10 — REALITY TEAR signature.
+            if (state.realityTearCooldown > 0) state.realityTearCooldown--;
+            if (state.realityTearCooldown == 0) {
+                realityTear(level, dragon);
+                state.realityTearCooldown = 60;
+            }
+        }
+    }
+
+    // -------------------- IMPOSSIBLE signatures --------------------
+
+    /** Spawns a persistent black hole at the nearest player position, lives for 160 ticks (8s). */
+    private static void spawnBlackhole(ServerLevel level, EnderDragon dragon, EmpoweredDragonState state) {
+        Player nearest = level.getNearestPlayer(dragon, 96.0);
+        if (nearest == null) return;
+        state.blackholeTicks = 160;
+        state.bhX = nearest.getX();
+        state.bhY = nearest.getY() + 10;
+        state.bhZ = nearest.getZ();
+        level.playSound(null, state.bhX, state.bhY, state.bhZ,
+                SoundEvents.WARDEN_SONIC_BOOM, SoundSource.HOSTILE, 12.0f, 0.3f);
+        level.playSound(null, state.bhX, state.bhY, state.bhZ,
+                SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 6.0f, 0.5f);
+        // Initial flash + shockwave.
+        level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                        ParticleTypes.FLASH, 0.0f, 0.0f, 0.0f),
+                state.bhX, state.bhY, state.bhZ, 12, 2.0, 2.0, 2.0, 0.0);
+    }
+
+    /** Per-tick animation + pull-in + damage for the black hole singularity. */
+    private static void tickBlackhole(ServerLevel level, EnderDragon dragon, EmpoweredDragonState state) {
+        state.blackholeTicks--;
+        double x = state.bhX, y = state.bhY, z = state.bhZ;
+        // Rotating accretion disk — two layers.
+        double t = (state.tickCounter % 80) / 80.0 * Math.PI * 2;
+        for (int i = 0; i < 18; i++) {
+            double a = t + i / 18.0 * Math.PI * 2;
+            double r = 5.0 + Math.sin(state.tickCounter * 0.15 + i) * 0.5;
+            level.sendParticles(ParticleTypes.REVERSE_PORTAL,
+                    x + Math.cos(a) * r, y, z + Math.sin(a) * r,
+                    1, 0.05, 0.05, 0.05, 0.05);
+        }
+        for (int i = 0; i < 12; i++) {
+            double a = -t * 1.5 + i / 12.0 * Math.PI * 2;
+            double r = 3.0;
+            level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+                    x + Math.cos(a) * r, y + 0.5, z + Math.sin(a) * r,
+                    1, 0.02, 0.02, 0.02, 0.0);
+        }
+        // Central void core.
+        level.sendParticles(ParticleTypes.SMOKE, x, y, z, 4, 0.4, 0.4, 0.4, 0.02);
+        level.sendParticles(ParticleTypes.SQUID_INK, x, y, z, 2, 0.3, 0.3, 0.3, 0.02);
+
+        // Pull players within 16 blocks towards the core + aura damage every 10 ticks.
+        AABB pullBox = new AABB(x - 16, y - 16, z - 16, x + 16, y + 16, z + 16);
+        List<Player> nearby = level.getEntitiesOfClass(Player.class, pullBox,
+                p -> p.isAlive() && !p.isCreative() && !p.isSpectator());
+        for (Player p : nearby) {
+            double dx = x - p.getX(), dy = y - p.getY(), dz = z - p.getZ();
+            double dist2 = dx * dx + dy * dy + dz * dz;
+            if (dist2 > 16 * 16) continue;
+            double dist = Math.sqrt(dist2) + 1e-3;
+            double strength = 0.12 * (1.0 - dist / 20.0);
+            p.setDeltaMovement(p.getDeltaMovement().add(dx / dist * strength, dy / dist * strength * 0.5, dz / dist * strength));
+            p.hurtMarked = true;
+            if (state.tickCounter % 10 == 0) {
+                p.hurtServer(level, dragon.damageSources().mobAttack(dragon), 6.0f);
+                p.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 60, 0));
+                p.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 60, 2));
+            }
+        }
+
+        // On expire — implosion flash.
+        if (state.blackholeTicks == 0) {
+            level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                            ParticleTypes.FLASH, 0.4f, 0.0f, 0.8f),
+                    x, y, z, 20, 4.0, 2.0, 4.0, 0.0);
+            level.sendParticles(ParticleTypes.EXPLOSION_EMITTER, x, y, z, 3, 1.0, 1.0, 1.0, 0.0);
+            level.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE.value(),
+                    SoundSource.HOSTILE, 10.0f, 0.4f);
+        }
+    }
+
+    /** Stage 8 — expanding ring of soul-fire around the dragon, damages + knocks up. */
+    private static void voidWave(ServerLevel level, EnderDragon dragon) {
+        double x = dragon.getX(), y = dragon.getY(), z = dragon.getZ();
+        for (int ring = 0; ring < 3; ring++) {
+            double r = 6.0 + ring * 4.0;
+            for (int i = 0; i < 48; i++) {
+                double a = i / 48.0 * Math.PI * 2;
+                level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+                        x + Math.cos(a) * r, y + 0.5, z + Math.sin(a) * r,
+                        1, 0.1, 0.1, 0.1, 0.0);
+                level.sendParticles(ParticleTypes.END_ROD,
+                        x + Math.cos(a) * r, y + 0.5, z + Math.sin(a) * r,
+                        1, 0.05, 0.05, 0.05, 0.02);
+            }
+        }
+        AABB box = new AABB(x - 16, y - 4, z - 16, x + 16, y + 6, z + 16);
+        DamageSource src = dragon.damageSources().mobAttack(dragon);
+        for (Player p : level.getEntitiesOfClass(Player.class, box,
+                pp -> pp.isAlive() && !pp.isCreative() && !pp.isSpectator())) {
+            double d2 = p.distanceToSqr(x, y, z);
+            if (d2 > 16 * 16) continue;
+            p.hurtServer(level, src, 7.0f);
+            // Knock up & outward.
+            double dx = p.getX() - x, dz = p.getZ() - z, dist = Math.sqrt(dx * dx + dz * dz) + 1e-3;
+            p.setDeltaMovement(p.getDeltaMovement().add(dx / dist * 0.7, 0.8, dz / dist * 0.7));
+            p.hurtMarked = true;
+        }
+        level.playSound(null, x, y, z, SoundEvents.WARDEN_SONIC_BOOM,
+                SoundSource.HOSTILE, 6.0f, 0.9f);
+    }
+
+    /** Stage 8+ — dragon teleport-strikes: vanishes near player, bursts damage around them. */
+    private static void phantomStrike(ServerLevel level, EnderDragon dragon) {
+        Player target = level.getNearestPlayer(dragon, 96.0);
+        if (target == null) return;
+        Vec3 tp = target.position();
+        // Teleport-burst at the player's location (visual only — dragon stays).
+        level.sendParticles(ParticleTypes.PORTAL, tp.x, tp.y + 1, tp.z, 180, 1.5, 2.0, 1.5, 1.0);
+        level.sendParticles(ParticleTypes.REVERSE_PORTAL, tp.x, tp.y + 1, tp.z, 80, 1.0, 1.5, 1.0, 0.4);
+        level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                        ParticleTypes.FLASH, 0.3f, 0.0f, 0.6f),
+                tp.x, tp.y + 1, tp.z, 3, 0.5, 0.5, 0.5, 0.0);
+        level.playSound(null, tp.x, tp.y, tp.z, SoundEvents.ENDERMAN_TELEPORT,
+                SoundSource.HOSTILE, 4.0f, 0.5f);
+        // Damage box.
+        AABB box = new AABB(tp.x - 2.5, tp.y - 1, tp.z - 2.5, tp.x + 2.5, tp.y + 3, tp.z + 2.5);
+        DamageSource src = dragon.damageSources().mobAttack(dragon);
+        for (Player p : level.getEntitiesOfClass(Player.class, box,
+                pp -> pp.isAlive() && !pp.isCreative() && !pp.isSpectator())) {
+            p.hurtServer(level, src, 10.0f);
+            p.addEffect(new MobEffectInstance(MobEffects.WITHER, 80, 1));
+        }
+    }
+
+    /** Stage 9 — sky-wide METEOR SWARM: 15 meteors per player, staggered offsets. */
+    private static void meteorSwarm(ServerLevel level, EnderDragon dragon) {
+        for (Player p : level.players()) {
+            if (p.isCreative() || p.isSpectator()) continue;
+            if (p.distanceToSqr(dragon) > 120 * 120) continue;
+            for (int i = 0; i < 15; i++) {
+                double ox = (RNG.nextDouble() - 0.5) * 20.0;
+                double oz = (RNG.nextDouble() - 0.5) * 20.0;
+                double py = p.getY() + 28 + RNG.nextDouble() * 8;
+                DragonFireball meteor = new DragonFireball(level, dragon, new Vec3(0, -1, 0).normalize());
+                meteor.setPos(p.getX() + ox, py, p.getZ() + oz);
+                level.addFreshEntity(meteor);
+            }
+        }
+        // Giant sky flash + thunder stinger.
+        level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.HOSTILE, 8.0f, 0.4f);
+        level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                        ParticleTypes.FLASH, 1.0f, 0.4f, 0.1f),
+                dragon.getX(), dragon.getY() + 20, dragon.getZ(), 12, 20.0, 4.0, 20.0, 0.0);
+    }
+
+    /** Stage 10 — REALITY TEAR: dragon's aura expands, time-tears appear, massive unavoidable hits. */
+    private static void realityTear(ServerLevel level, EnderDragon dragon) {
+        double x = dragon.getX(), y = dragon.getY(), z = dragon.getZ();
+        // Sky darkening via blindness/wither applied to all players on the level for 3s.
+        DamageSource src = dragon.damageSources().mobAttack(dragon);
+        for (Player p : level.players()) {
+            if (p.isCreative() || p.isSpectator()) continue;
+            if (p.distanceToSqr(dragon) > 160 * 160) continue;
+            p.hurtServer(level, src, 8.0f);
+            p.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 60, 0));
+            p.addEffect(new MobEffectInstance(MobEffects.WITHER, 100, 2));
+            p.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 120, 1));
+            // Tear effect around the player.
+            Vec3 pp = p.position();
+            for (int i = 0; i < 60; i++) {
+                double a = i / 60.0 * Math.PI * 2;
+                double r = 3.5 + (i % 4) * 0.3;
+                level.sendParticles(ParticleTypes.REVERSE_PORTAL,
+                        pp.x + Math.cos(a) * r, pp.y + 1 + Math.sin(i * 0.8) * 0.5, pp.z + Math.sin(a) * r,
+                        1, 0.05, 0.05, 0.05, 0.02);
+                level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                                ParticleTypes.FLASH, 0.6f, 0.0f, 0.8f),
+                        pp.x + Math.cos(a) * r, pp.y + 1, pp.z + Math.sin(a) * r, 1, 0, 0, 0, 0);
+            }
+        }
+        // Vortex over the dragon.
+        for (int i = 0; i < 120; i++) {
+            double a = i / 120.0 * Math.PI * 2;
+            double r = 6 + (i % 6);
+            level.sendParticles(ParticleTypes.PORTAL,
+                    x + Math.cos(a) * r, y + 3, z + Math.sin(a) * r,
+                    2, 0.0, 1.5, 0.0, 0.5);
+        }
+        level.playSound(null, x, y, z, SoundEvents.WARDEN_SONIC_BOOM, SoundSource.HOSTILE, 12.0f, 0.4f);
+        level.playSound(null, x, y, z, SoundEvents.ENDER_DRAGON_GROWL, SoundSource.HOSTILE, 12.0f, 0.2f);
     }
 
     /**
@@ -569,8 +814,12 @@ public final class DragonBehavior {
     }
 
     private static void applyAuraDamage(ServerLevel level, EnderDragon dragon, EmpoweredDragonState state) {
-        double radius = state.stage >= 6 ? 18.0 : state.stage >= 5 ? 15.0 : state.stage >= 4 ? 12.0 : 8.0;
-        float damage = state.stage >= 6 ? 8.0f : state.stage >= 5 ? 6.0f : state.stage >= 4 ? 4.0f : 2.0f;
+        double radius = state.stage >= 10 ? 28.0 : state.stage >= 9 ? 24.0 : state.stage >= 8 ? 22.0
+                : state.stage >= 7 ? 20.0 : state.stage >= 6 ? 18.0 : state.stage >= 5 ? 15.0
+                : state.stage >= 4 ? 12.0 : 8.0;
+        float damage = state.stage >= 10 ? 14.0f : state.stage >= 9 ? 12.0f : state.stage >= 8 ? 11.0f
+                : state.stage >= 7 ? 10.0f : state.stage >= 6 ? 8.0f : state.stage >= 5 ? 6.0f
+                : state.stage >= 4 ? 4.0f : 2.0f;
         Vec3 c = dragon.position();
         AABB box = new AABB(c.x - radius, c.y - radius, c.z - radius,
                 c.x + radius, c.y + radius, c.z + radius);
@@ -625,6 +874,10 @@ public final class DragonBehavior {
             case 4 -> ChatFormatting.DARK_RED;
             case 5 -> ChatFormatting.GOLD;
             case 6 -> ChatFormatting.DARK_PURPLE;
+            case 7 -> ChatFormatting.BLACK;
+            case 8 -> ChatFormatting.DARK_AQUA;
+            case 9 -> ChatFormatting.RED;
+            case 10 -> ChatFormatting.DARK_RED;
             default -> ChatFormatting.LIGHT_PURPLE;
         };
         String roman = switch (state.stage) {
@@ -633,6 +886,10 @@ public final class DragonBehavior {
             case 4 -> "IV";
             case 5 -> "V";
             case 6 -> "VI";
+            case 7 -> "VII";
+            case 8 -> "VIII";
+            case 9 -> "IX";
+            case 10 -> "X";
             default -> "I";
         };
         Component title = Component.literal("⚡ Ярость " + roman + " ⚡")
@@ -644,6 +901,10 @@ public final class DragonBehavior {
             case 4 -> "КАТАКЛИЗМ — он стал неуязвим ко всему";
             case 5 -> "ОГНЕННЫЙ ДОЖДЬ — небо пылает";
             case 6 -> "ТЕНЕВЫЕ КЛОНЫ — финальный экзамен смерти";
+            case 7 -> "✦ ЧЁРНАЯ ДЫРА ✦ — реальность схлопывается";
+            case 8 -> "✧ ПУСТОТНЫЕ ВОЛНЫ ✧ — мир дрожит";
+            case 9 -> "☄ МЕТЕОРИТНЫЙ РОЙ ☄ — небеса рухнут на тебя";
+            case 10 -> "✹ РАЗРЫВ РЕАЛЬНОСТИ ✹ — конец времени";
             default -> "";
         }).withStyle(colour);
         Component chat = Component.empty()
@@ -728,6 +989,91 @@ public final class DragonBehavior {
             for (int i = 0; i < 5; i++) {
                 level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
                         SoundEvents.ENDER_DRAGON_GROWL, SoundSource.HOSTILE, 12.0f, 0.2f + i * 0.1f);
+            }
+        }
+        // Stage VII — black-hole arrival: reality implodes. Pure black flash + squid-ink cloud.
+        if (state.stage >= 7) {
+            level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                            ParticleTypes.FLASH, 0.0f, 0.0f, 0.0f),
+                    dragon.getX(), dragon.getY() + 4, dragon.getZ(), 30, 8.0, 4.0, 8.0, 0.0);
+            level.sendParticles(ParticleTypes.SQUID_INK,
+                    dragon.getX(), dragon.getY() + 4, dragon.getZ(), 200, 8.0, 4.0, 8.0, 0.3);
+            level.sendParticles(ParticleTypes.SMOKE,
+                    dragon.getX(), dragon.getY() + 4, dragon.getZ(), 400, 10.0, 6.0, 10.0, 0.2);
+            level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                    SoundEvents.WARDEN_SONIC_BOOM, SoundSource.HOSTILE, 16.0f, 0.2f);
+            // Screen-wide blindness 1.5s so clients feel "reality warping".
+            for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                if (p.level() == level) {
+                    p.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 30, 0));
+                }
+            }
+        }
+        // Stage VIII — void-wave overture: cyan/teal cascade, expanding rings.
+        if (state.stage >= 8) {
+            level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                            ParticleTypes.FLASH, 0.0f, 0.8f, 0.8f),
+                    dragon.getX(), dragon.getY() + 2, dragon.getZ(), 20, 6.0, 3.0, 6.0, 0.0);
+            for (int ring = 1; ring <= 6; ring++) {
+                double r = ring * 3.0;
+                for (int i = 0; i < 40; i++) {
+                    double a = i / 40.0 * Math.PI * 2;
+                    level.sendParticles(ParticleTypes.END_ROD,
+                            dragon.getX() + Math.cos(a) * r,
+                            dragon.getY() + 0.5,
+                            dragon.getZ() + Math.sin(a) * r,
+                            1, 0.02, 0.4, 0.02, 0.0);
+                }
+            }
+            level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                    SoundEvents.WARDEN_SONIC_BOOM, SoundSource.HOSTILE, 14.0f, 1.2f);
+        }
+        // Stage IX — meteor swarm overture: skies turn red, first volley lights up.
+        if (state.stage >= 9) {
+            level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                            ParticleTypes.FLASH, 1.0f, 0.2f, 0.0f),
+                    dragon.getX(), dragon.getY() + 20, dragon.getZ(), 40, 20.0, 4.0, 20.0, 0.0);
+            for (int i = 0; i < 10; i++) {
+                level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                        SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.HOSTILE, 10.0f, 0.3f + (i % 3) * 0.1f);
+            }
+            // First volley — preview of what's coming.
+            for (Player p : level.players()) {
+                if (p.isCreative() || p.isSpectator()) continue;
+                if (p.distanceToSqr(dragon) > 120 * 120) continue;
+                for (int i = 0; i < 8; i++) {
+                    double ox = (RNG.nextDouble() - 0.5) * 16.0;
+                    double oz = (RNG.nextDouble() - 0.5) * 16.0;
+                    DragonFireball meteor = new DragonFireball(level, dragon, new Vec3(0, -1, 0).normalize());
+                    meteor.setPos(p.getX() + ox, p.getY() + 30, p.getZ() + oz);
+                    level.addFreshEntity(meteor);
+                }
+            }
+        }
+        // Stage X — REALITY TEAR overture: the entire End screams.
+        if (state.stage >= 10) {
+            level.sendParticles(net.minecraft.core.particles.ColorParticleOption.create(
+                            ParticleTypes.FLASH, 0.8f, 0.0f, 1.0f),
+                    dragon.getX(), dragon.getY() + 4, dragon.getZ(), 80, 10.0, 6.0, 10.0, 0.0);
+            level.sendParticles(ParticleTypes.REVERSE_PORTAL,
+                    dragon.getX(), dragon.getY() + 8, dragon.getZ(), 2000, 20.0, 14.0, 20.0, 1.6);
+            level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+                    dragon.getX(), dragon.getY() + 2, dragon.getZ(), 800, 14.0, 7.0, 14.0, 0.4);
+            strikeLightningAround(level, dragon.getX(), dragon.getY(), dragon.getZ(), 40, 18.0);
+            for (int i = 0; i < 8; i++) {
+                level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                        SoundEvents.ENDER_DRAGON_GROWL, SoundSource.HOSTILE, 16.0f, 0.1f + i * 0.08f);
+            }
+            level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                    SoundEvents.WITHER_SPAWN, SoundSource.HOSTILE, 16.0f, 0.4f);
+            level.playSound(null, dragon.getX(), dragon.getY(), dragon.getZ(),
+                    SoundEvents.WARDEN_SONIC_BOOM, SoundSource.HOSTILE, 20.0f, 0.2f);
+            // Screen shake / darken for everyone: blindness + nausea.
+            for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                if (p.level() == level) {
+                    p.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 60, 0));
+                    p.addEffect(new MobEffectInstance(MobEffects.DARKNESS, 100, 0));
+                }
             }
         }
 

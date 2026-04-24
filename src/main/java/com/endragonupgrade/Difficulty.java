@@ -9,7 +9,9 @@ public enum Difficulty {
     /** Very hard: double HP, stage IV, doubled attack cadence, custom HUD flair. */
     VERY_HARD(2.0f, 1200.0f, 4, "§4§lОчень сложная"),
     /** Extreme: 2000 HP, 6 stages, ~3x VERY_HARD attack cadence, unique attacks, gold-crimson HUD. */
-    EXTREME(6.0f, 2000.0f, 6, "§6§l§nЭКСТРИМ");
+    EXTREME(6.0f, 2000.0f, 6, "§6§l§nЭКСТРИМ"),
+    /** Impossible: 5000 HP, 10 stages, ~3x EXTREME cadence, signature black-hole / meteor-swarm / reality-tear phases. */
+    IMPOSSIBLE(18.0f, 5000.0f, 10, "§0§l§n§kX§r §4§l§nНЕВОЗМОЖНО§r §0§l§n§kX§r");
 
     public final float damageMul;
     public final float maxHp;

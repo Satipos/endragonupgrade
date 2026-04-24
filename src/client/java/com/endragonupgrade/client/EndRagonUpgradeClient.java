@@ -15,6 +15,7 @@ public class EndRagonUpgradeClient implements ClientModInitializer {
         ClientNetworkHandler.register();
         EmpoweredHealthBar.register();
         ScreenShakeHandler.register();
+        CustomLobby.register();
 
         // Required or Minecraft crashes when the custom arrow entity reaches a client.
         EntityRendererRegistry.register(DragonShotItem.ENTITY_TYPE, DragonShotArrowRenderer::new);
