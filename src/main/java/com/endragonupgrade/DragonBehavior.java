@@ -51,6 +51,17 @@ public final class DragonBehavior {
 
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(DragonBehavior::onServerTick);
+        // v3.5.2 — absorb damage into the shield HP pool for IMPOSSIBLE dragons.
+        net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.AFTER_DAMAGE.register(
+                (entity, source, original, dealt, blocked) -> {
+                    if (entity instanceof EnderDragon dragon) {
+                        try {
+                            absorbDamageIntoShield(dragon, dealt);
+                        } catch (Throwable t) {
+                            EndRagonUpgradeMod.LOGGER.error("Shield absorb failed", t);
+                        }
+                    }
+                });
     }
 
     private static void onServerTick(MinecraftServer server) {
@@ -229,7 +240,7 @@ public final class DragonBehavior {
     }
 
     private static int computeStage(EnderDragon dragon, EmpoweredDragonState state) {
-        float pct = dragon.getHealth() / dragon.getMaxHealth();
+        float pct = getTotalHealth(dragon, state) / getTotalMaxHealth(dragon, state);
         if (state.difficulty == Difficulty.IMPOSSIBLE) {
             // 10 stages. Thresholds chosen so each phase is noticeably shorter than the previous.
             if (pct <= 0.03f) return 10; // Reality Tear
@@ -264,15 +275,60 @@ public final class DragonBehavior {
     }
 
     private static void applyEmpowermentBuffs(EnderDragon dragon, EmpoweredDragonState state) {
+        // Vanilla Minecraft caps the `generic.max_health` attribute at 1024. To get dragons
+        // with effective HP above that (e.g. IMPOSSIBLE's 5000), we split the pool:
+        //  - realMax  = min(targetHp, 1024)  lives on the attribute / on the entity
+        //  - shieldHp = targetHp - realMax   lives in our state, absorbs damage first
         float targetHp = state.difficulty.maxHp;
+        float realMax = Math.min(targetHp, EmpoweredDragonState.VANILLA_MAX_HEALTH_CAP);
+        float extraShield = Math.max(0f, targetHp - realMax);
         AttributeInstance maxHp = dragon.getAttribute(Attributes.MAX_HEALTH);
-        if (maxHp != null && maxHp.getBaseValue() < targetHp - 0.5) {
-            maxHp.setBaseValue(targetHp);
-            dragon.setHealth(targetHp);
+        if (maxHp != null && Math.abs(maxHp.getBaseValue() - realMax) > 0.5) {
+            maxHp.setBaseValue(realMax);
+            dragon.setHealth(realMax);
+        }
+        if (state.shieldMaxHp <= 0f && extraShield > 0f) {
+            state.shieldMaxHp = extraShield;
+            state.shieldHp = extraShield;
         }
         if (!dragon.hasGlowingTag()) {
             dragon.setGlowingTag(true);
         }
+    }
+
+    /**
+     * Absorb damage into {@link EmpoweredDragonState#shieldHp} before it touches the dragon's
+     * real HP. This lets the dragon have an effective HP pool greater than the vanilla
+     * {@code 1024} attribute cap. Called from the ServerLivingEntityEvents damage listeners.
+     *
+     * <p>Called <em>after</em> vanilla damage has been applied. If shield has charge, we heal
+     * the dragon back by the dealt amount (reducing shield equivalently). If the damage
+     * exceeds remaining shield, the overflow stays on the real HP bar.
+     */
+    public static void absorbDamageIntoShield(EnderDragon dragon, float dealtAmount) {
+        if (dealtAmount <= 0f) return;
+        if (!(dragon.level() instanceof ServerLevel sl)) return;
+        DragonRegistry registry = DragonRegistry.get(sl.getServer());
+        EmpoweredDragonState state = registry.state(dragon);
+        if (state == null) return;
+        if (state.shieldHp <= 0f) return;
+        float absorbed = Math.min(dealtAmount, state.shieldHp);
+        state.shieldHp -= absorbed;
+        // Heal dragon by the absorbed amount so the real HP bar doesn't drop.
+        float healed = Math.min(absorbed, dragon.getMaxHealth() - dragon.getHealth());
+        if (healed > 0f) {
+            dragon.setHealth(dragon.getHealth() + healed);
+        }
+    }
+
+    /** Total effective HP (real + shield). Used by HP-bar sync and stage thresholds. */
+    public static float getTotalHealth(EnderDragon dragon, EmpoweredDragonState state) {
+        return dragon.getHealth() + Math.max(0f, state.shieldHp);
+    }
+
+    /** Total effective max HP (real max + shield max). */
+    public static float getTotalMaxHealth(EnderDragon dragon, EmpoweredDragonState state) {
+        return dragon.getMaxHealth() + Math.max(0f, state.shieldMaxHp);
     }
 
     // -------------------- Aura & cosmetic ticks --------------------
@@ -1083,8 +1139,12 @@ public final class DragonBehavior {
     }
 
     private static void broadcastHealth(MinecraftServer server, EnderDragon dragon, EmpoweredDragonState state) {
+        // Use total (real + shield) HP so the bar reflects the advertised pool
+        // (e.g. 5000/5000 on IMPOSSIBLE rather than 1024/1024).
+        float total = getTotalHealth(dragon, state);
+        float totalMax = getTotalMaxHealth(dragon, state);
         NetworkPayloads.HealthUpdatePayload health = new NetworkPayloads.HealthUpdatePayload(
-                dragon.getId(), dragon.getHealth(), dragon.getMaxHealth(), Math.max(1, state.stage));
+                dragon.getId(), total, totalMax, Math.max(1, state.stage));
         NetworkPayloads.DifficultyInfoPayload diff = new NetworkPayloads.DifficultyInfoPayload(state.difficulty.id());
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             ServerPlayNetworking.send(p, health);

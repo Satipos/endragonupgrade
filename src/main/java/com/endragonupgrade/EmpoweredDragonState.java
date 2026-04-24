@@ -59,6 +59,13 @@ public final class EmpoweredDragonState {
     public int chainFreezeTicksLeft = 0;
     public static final int CHAIN_FREEZE_TICKS = 200; // 10 s at 20tps
 
+    // Shield HP — virtual health beyond vanilla 1024 cap. For IMPOSSIBLE difficulty the
+    // dragon is effectively 5000 HP: real max_health stays at 1024, extra (5000-1024) is
+    // absorbed by this shield before real damage leaks through. Updated via ServerLivingEntityEvents.
+    public static final float VANILLA_MAX_HEALTH_CAP = 1024.0f;
+    public float shieldHp = 0f;
+    public float shieldMaxHp = 0f;
+
     public EmpoweredDragonState(UUID dragonId, float originalMaxHealth, Difficulty difficulty) {
         this.dragonId = dragonId;
         this.originalMaxHealth = originalMaxHealth;
